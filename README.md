@@ -1,1 +1,0 @@
-# Thuyet-minh-tu-dong-da-ngon-ngu
