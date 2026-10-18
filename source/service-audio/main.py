@@ -1,28 +1,26 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import edge_tts   
+import edge_tts    
 import httpx
-import asyncio
 import os
 import hashlib     
-import time
+from typing import Optional
 
+AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://auth-service:8001")
 CONTENT_SERVICE_URL = os.getenv("CONTENT_SERVICE_URL", "http://content-service:8002")
-LOCALIZATION_SERVICE_URL = os.getenv("LOCALIZATION_SERVICE_URL", "http://localization-service:8004")
-AUDIO_DIR = os.getenv("AUDIO_DIR", "/app/audio_files")  # Thư mục lưu file MP3
+AUDIO_DIR = os.getenv("AUDIO_DIR", "/app/audio_files")  
 
-# Mapping ngôn ngữ  giọng đọc
+
 VOICE_MAP = {
-    "vi": "vi-VN-HoaiMyNeural",       # Tiếng Việt - Giọng Hoài My
-    "en": "en-US-JennyNeural",         # Tiếng Anh - Giọng Jenny
-    "zh": "zh-CN-XiaoxiaoNeural",      # Tiếng Trung - Giọng Xiaoxiao
-    "ja": "ja-JP-NanamiNeural",        # Tiếng Nhật - Giọng Nanami
-    "ko": "ko-KR-SunHiNeural",         # Tiếng Hàn - Giọng Sun Hi
+    "vi": "vi-VN-HoaiMyNeural",       
+    "en": "en-US-JennyNeural",         
+    "zh": "zh-CN-XiaoxiaoNeural",      
+    "ja": "ja-JP-NanamiNeural",        
+    "ko": "ko-KR-SunHiNeural",         
 }
 
-# Đảm bảo thư mục audio tồn tại
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
 app = FastAPI(
@@ -38,7 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 def make_audio_filename(text: str, language: str) -> str:
     content_hash = hashlib.md5(f"{text}_{language}".encode()).hexdigest()
     return f"{content_hash}.mp3"
@@ -46,11 +43,7 @@ def make_audio_filename(text: str, language: str) -> str:
 
 async def generate_tts_audio(text: str, language: str, output_path: str):
     voice = VOICE_MAP.get(language, VOICE_MAP["vi"])  # Mặc định tiếng Việt nếu không tìm thấy
-    
-    # Tạo đối tượng Communicate của edge-tts
     communicate = edge_tts.Communicate(text=text, voice=voice)
-    
-    # Lưu file audio
     await communicate.save(output_path)
 
 
@@ -73,41 +66,28 @@ async def get_poi_from_content_service(poi_id: str) -> dict:
             )
 
 
-async def get_poi_from_localization_service(poi_id: str, language: str) -> dict:
+async def verify_token(authorization: str) -> dict:
     async with httpx.AsyncClient() as client:
         try:
             response = await client.get(
-                f"{LOCALIZATION_SERVICE_URL}/poi/{poi_id}?lang={language}",
-                timeout=10.0
+                f"{AUTH_SERVICE_URL}/verify",
+                headers={"Authorization": authorization},
+                timeout=5.0
             )
-            if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+            if response.status_code == 401:
+                raise HTTPException(status_code=401, detail="Token không hợp lệ hoặc đã hết hạn")
             if response.status_code != 200:
-                raise HTTPException(status_code=502, detail="Localization Service lỗi")
+                raise HTTPException(status_code=502, detail="Auth Service lỗi")
             return response.json()
         except httpx.ConnectError:
             raise HTTPException(
                 status_code=503,
-                detail="Localization Service không phản hồi"
+                detail="Auth Service không phản hồi"
             )
 
-
-
 class TextToSpeechRequest(BaseModel):
-    """Tạo audio từ text tùy ý"""
     text: str
-    language: str = "vi"  
-
-
-class AudioStatus(BaseModel):
-    """Trạng thái của file audio"""
-    poi_id: str
-    language: str
-    status: str
-    file_path: str
-    file_size_kb: float
-
-# API endpoints
+    language: str = "vi"  #
 
 
 @app.get("/")
@@ -136,15 +116,13 @@ async def text_to_speech(request: TextToSpeechRequest):
     if len(request.text) > 5000:
         raise HTTPException(status_code=400, detail="Text quá dài (tối đa 5000 ký tự)")
 
-    # Tạo tên file từ nội dung (cache - nếu đã tạo rồi thì không tạo lại)
     filename = make_audio_filename(request.text, request.language)
     output_path = os.path.join(AUDIO_DIR, filename)
 
     if not os.path.exists(output_path):
-        # Chưa có → tạo mới
         await generate_tts_audio(request.text, request.language, output_path)
 
-    file_size = os.path.getsize(output_path) / 1024  # Chuyển sang KB
+    file_size = os.path.getsize(output_path) / 1024  
 
     return {
         "message": "Tạo audio thành công!",
@@ -163,34 +141,24 @@ async def generate_poi_audio(poi_id: str, language: str = "vi"):
             detail=f"Ngôn ngữ '{language}' không được hỗ trợ. Chọn: {list(VOICE_MAP.keys())}"
         )
 
-    poi_name = ""
-    text = ""
-    actual_lang = language
+    poi = await get_poi_from_content_service(poi_id)
 
-    # Bước 1: Gọi Localization Service để lấy bản dịch chuẩn
-    try:
-        localized = await get_poi_from_localization_service(poi_id, language)
-        poi_name = localized.get("poi_name", "")
-        text = localized.get("text", "")
-        actual_lang = localized.get("actual_lang", language)
-    except HTTPException:
-        # Nếu Localization Service lỗi hoặc không khả dụng, fallback sang Content Service
-        poi = await get_poi_from_content_service(poi_id)
-        poi_name = poi.get("name", "")
-        if language == "vi":
-            text = poi.get("description_vi", poi.get("description_en", ""))
-            actual_lang = "vi"
-        else:
-            text = poi.get("description_en", poi.get("description_vi", ""))
-            actual_lang = "en"
+    poi_name = poi.get("name", "")
+    if language == "vi":
+        text = poi.get("description_vi", "")
+        actual_lang = "vi"
+    elif language == "en":
+        text = poi.get("description_en", "")
+        actual_lang = "en"
+    else:
+        text = poi.get("description_en", poi.get("description_vi", ""))
+        actual_lang = language
 
     if not text:
         raise HTTPException(status_code=404, detail="Không có nội dung thuyết minh cho địa điểm này")
 
-    # Thêm tên địa điểm vào đầu (nếu có tên)
     full_text = f"{poi_name}. {text}" if poi_name else text
 
-    # Bước 2: Tạo file MP3 theo đúng ngôn ngữ thực tế
     filename = make_audio_filename(f"{poi_id}_{full_text}", actual_lang)
     output_path = os.path.join(AUDIO_DIR, filename)
 
@@ -210,9 +178,45 @@ async def generate_poi_audio(poi_id: str, language: str = "vi"):
     }
 
 
+@app.post("/tts/protected")
+async def text_to_speech_protected(
+    request: TextToSpeechRequest,
+    authorization: Optional[str] = Header(None)
+):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Thiếu token. Vui lòng đăng nhập.")
+
+    user_info = await verify_token(authorization)
+
+    if request.language not in VOICE_MAP:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Ngôn ngữ '{request.language}' không được hỗ trợ. Chọn: {list(VOICE_MAP.keys())}"
+        )
+
+    if len(request.text) > 5000:
+        raise HTTPException(status_code=400, detail="Text quá dài (tối đa 5000 ký tự)")
+
+    filename = make_audio_filename(request.text, request.language)
+    output_path = os.path.join(AUDIO_DIR, filename)
+
+    if not os.path.exists(output_path):
+        await generate_tts_audio(request.text, request.language, output_path)
+
+    file_size = os.path.getsize(output_path) / 1024
+
+    return {
+        "message": "Tạo audio thành công!",
+        "requested_by": user_info.get("username", "unknown"),
+        "language": request.language,
+        "voice_used": VOICE_MAP[request.language],
+        "audio_url": f"/audio/download/{filename}",
+        "file_size_kb": round(file_size, 1)
+    }
+
+
 @app.get("/audio/download/{filename}")
 async def download_audio(filename: str):
-    # Chỉ cho phép file .mp3 để tránh lỗ hổng bảo mật path traversal
     if not filename.endswith(".mp3"):
         raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file MP3")
 
