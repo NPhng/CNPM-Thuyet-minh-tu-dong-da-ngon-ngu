@@ -1,0 +1,1 @@
+export default {content:["./index.html","./src/**/*.{js,ts,jsx,tsx}"],theme:{extend:{colors:{forest:"var(--green-950)",leaf:"var(--green-800)",fresh:"var(--green-600)",mint:"var(--green-400)",pale:"var(--green-200)",canvas:"var(--green-50)"},borderRadius:{'2xl':'1rem'}}},plugins:[]};
