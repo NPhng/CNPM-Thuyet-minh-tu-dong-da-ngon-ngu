@@ -40,6 +40,7 @@ services:
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
       - TICKET_TTL=${TICKET_TTL:-end_of_day}
       - ACTIVATE_RATE_LIMIT=${ACTIVATE_RATE_LIMIT:-20}
+      - ACTIVATE_IP_RATE_LIMIT=${ACTIVATE_IP_RATE_LIMIT:-300}
       - ACTIVATE_RATE_WINDOW_SEC=${ACTIVATE_RATE_WINDOW_SEC:-60}
     depends_on:
       mongo:
