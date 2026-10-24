@@ -20,6 +20,7 @@ VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost").rstrip("/")
 TICKET_TTL = os.getenv("TICKET_TTL", "end_of_day")
 ACTIVATE_RATE_LIMIT = int(os.getenv("ACTIVATE_RATE_LIMIT", "20"))
+ACTIVATE_IP_RATE_LIMIT = int(os.getenv("ACTIVATE_IP_RATE_LIMIT", "300"))
 ACTIVATE_RATE_WINDOW_SEC = int(os.getenv("ACTIVATE_RATE_WINDOW_SEC", "60"))
 
 _CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
@@ -123,18 +124,14 @@ def check_activate_rate_limit(request: Request, device_id: str) -> None:
     """Giới hạn theo IP và theo cặp IP+device để giảm đoán mã."""
     ip = request.client.host if request.client else "unknown"
     now = datetime.now(timezone.utc).timestamp()
-    keys = (ip, f"{ip}:{device_id or '-'}")
+    keys = ((ip, ACTIVATE_IP_RATE_LIMIT), (f"{ip}:{device_id or '-'}", ACTIVATE_RATE_LIMIT))
     with _rate_lock:
-        for key in keys:
+        for key, limit in keys:
             hits = _rate_hits[key]
             while hits and now - hits[0] > ACTIVATE_RATE_WINDOW_SEC:
                 hits.popleft()
-            if len(hits) >= ACTIVATE_RATE_LIMIT:
-                ticket_error(
-                    429,
-                    "rate_limited",
-                    "Quá nhiều lần thử mã vé. Vui lòng đợi một lát.",
-                )
+            if len(hits) >= limit:
+                ticket_error(429,"rate_limit_exceeded","Thử quá nhiều lần, vui lòng đợi ít phút",)  
             hits.append(now)
 
 
