@@ -30,13 +30,13 @@ services:
     networks:
       - zoo-network
     environment:
-      - JWT_SECRET=${JWT_SECRET:-zoo-demo-secret-key-change-me-32-bytes!!}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
       - MONGO_URI=mongodb://mongo:27017
       - DB_NAME=${DB_NAME:-zoo}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required - set it in .env}
       - COUNTER_USERNAME=${COUNTER_USERNAME:-counter01}
-      - COUNTER_PASSWORD=${COUNTER_PASSWORD:-counter123}
+      - COUNTER_PASSWORD=${COUNTER_PASSWORD:?COUNTER_PASSWORD is required - set it in .env}
       - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
       - TICKET_TTL=${TICKET_TTL:-end_of_day}
       - ACTIVATE_RATE_LIMIT=${ACTIVATE_RATE_LIMIT:-20}
@@ -63,11 +63,11 @@ services:
     networks:
       - zoo-network
     environment:
-      - JWT_SECRET=${JWT_SECRET:-zoo-demo-secret-key-change-me-32-bytes!!}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
       - MONGO_URI=mongodb://mongo:27017
       - DB_NAME=${DB_NAME:-zoo}
       - AUDIO_SERVICE_URL=http://audio-service:8003
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-internal-secret-change-me}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - N_ACTIVE_MINUTES=${N_ACTIVE_MINUTES:-10}
       - PRESENCE_ENTER_TTL_MINUTES=${PRESENCE_ENTER_TTL_MINUTES:-120}
       - EVENT_DEDUPE_SECONDS=${EVENT_DEDUPE_SECONDS:-30}
@@ -103,11 +103,11 @@ services:
     networks:
       - zoo-network
     environment:
-      - JWT_SECRET=${JWT_SECRET:-zoo-demo-secret-key-change-me-32-bytes!!}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
       - MONGO_URI=mongodb://mongo:27017
       - DB_NAME=${DB_NAME:-zoo}
       - CONTENT_SERVICE_URL=http://content-service:8002
-      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:-internal-secret-change-me}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - AUDIO_DIR=/app/audio_files
     depends_on:
       mongo:

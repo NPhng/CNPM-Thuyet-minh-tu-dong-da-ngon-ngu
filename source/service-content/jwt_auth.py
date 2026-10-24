@@ -17,9 +17,31 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-JWT_SECRET = os.getenv("JWT_SECRET", "zoo-demo-secret-CHANGE-ME-32bytes!!")
 JWT_ALGORITHM = "HS256"
 _TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
+
+# Các giá trị mẫu/công khai: KHÔNG được dùng khi chạy thật.
+_WEAK_JWT_SECRETS = {
+    "change-me-to-a-long-random-string",
+    "zoo-demo-secret-CHANGE-ME-32bytes!!",
+    "zoo-demo-secret-key-change-me-32-bytes!!",
+}
+
+
+def _load_jwt_secret() -> str:
+    secret = os.getenv("JWT_SECRET", "").strip()
+    if _TESTING:
+        # Chỉ dành cho pytest/CI. Không bao giờ chạy thật với TESTING=1.
+        return secret or "test-only-secret-not-for-production-32b"
+    if len(secret) < 32 or secret in _WEAK_JWT_SECRETS:
+        raise RuntimeError(
+            "JWT_SECRET chưa đặt hoặc quá yếu (cần >= 32 ký tự, không dùng giá trị mẫu). "
+            'Tạo bằng: python -c "import secrets; print(secrets.token_urlsafe(48))"'
+        )
+    return secret
+
+
+JWT_SECRET = _load_jwt_secret()
 TICKET_LOOKUP_CACHE_TTL = 0.0 if _TESTING else float(os.getenv("TICKET_LOOKUP_CACHE_TTL", "2"))
 
 _bearer_scheme = HTTPBearer(auto_error=False)

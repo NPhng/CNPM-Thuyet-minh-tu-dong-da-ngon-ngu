@@ -10,23 +10,24 @@
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
+    "autoprefixer": "latest",
+    "html5-qrcode": "2.3.8",
+    "leaflet": "latest",
+    "lucide-react": "latest",
+    "postcss": "latest",
+    "qrcode.react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "react-router-dom": "latest",
-    "lucide-react": "latest",
-    "leaflet": "latest",
     "react-leaflet": "latest",
+    "react-router-dom": "latest",
     "recharts": "latest",
-    "qrcode.react": "latest",
     "tailwindcss": "^3.4.17",
-    "postcss": "latest",
-    "autoprefixer": "latest"
+    "typescript": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
+    "@types/leaflet": "latest",
     "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@types/leaflet": "latest"
+    "@types/react-dom": "latest"
   }
 }

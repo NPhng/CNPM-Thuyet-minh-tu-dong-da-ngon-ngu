@@ -10,8 +10,24 @@ import httpx
 log = logging.getLogger("content.audio")
 
 AUDIO_SERVICE_URL = os.getenv("AUDIO_SERVICE_URL", "http://audio-service:8003").rstrip("/")
-INTERNAL_SERVICE_KEY = os.getenv("INTERNAL_SERVICE_KEY", "internal-secret-change-me")
 TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
+
+_WEAK_INTERNAL_KEYS = {"internal-secret-change-me", "change-me-internal-key"}
+
+
+def _load_internal_key() -> str:
+    key = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
+    if TESTING:
+        return key or "internal-secret-change-me"
+    if len(key) < 16 or key in _WEAK_INTERNAL_KEYS:
+        raise RuntimeError(
+            "INTERNAL_SERVICE_KEY chưa đặt hoặc quá yếu (cần >= 16 ký tự, không dùng giá trị mẫu). "
+            'Tạo bằng: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    return key
+
+
+INTERNAL_SERVICE_KEY = _load_internal_key()
 
 
 async def generate_poi_audio(poi_id: str, languages: list[str] | None = None) -> None:
