@@ -3,3 +3,42 @@
 @media(max-width:900px){.hero{padding:32px}.hero-art{width:200px}.hero-animal{font-size:100px}.explore-content{grid-template-columns:1fr}.map-list{display:grid;grid-template-columns:1fr 1fr}.sidebar{width:210px}.staff-content{padding:22px}.detail-hero{gap:22px}.detail-photo{height:280px}}
 @media(max-width:640px){.topbar{height:66px;padding:0 14px}.brand{gap:8px}.brand-icon{width:36px;height:36px}.brand b{font-size:13px}.brand small{font-size:9px}.topbar .btn{padding:9px 10px;font-size:11px;min-height:39px}.guest-wrap{padding:14px 13px 0}.hero{padding:26px 22px;min-height:360px;align-items:flex-start}.hero-copy{max-width:100%}.hero h1{font-size:35px}.hero p{font-size:12px;max-width:95%}.hero-art{position:absolute;right:-7px;bottom:-18px;width:145px;height:145px;opacity:.38}.hero-animal{font-size:88px}.hero-art>span{font-size:25px}.hero-actions{gap:8px}.hero-actions .btn{font-size:10px;padding:10px}.info-grid{grid-template-columns:1fr;gap:9px;margin:13px 0 35px}.info-card{padding:12px}.info-icon{width:35px;height:35px}.section-heading{align-items:flex-start;flex-direction:column;gap:12px}.section-heading h2{font-size:24px}.section-heading .btn{width:100%}.search-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}.searchbox{grid-column:1/-1}.search-row select{width:100%;max-width:none}.map{height:350px}.map-list{display:flex}.poi-card{padding:9px;gap:9px}.poi-thumb{width:58px;height:58px}.poi-card-copy>b{font-size:12px}.poi-card-copy p{font-size:10px}.poi-card-copy .category{font-size:8px}.explore-content{gap:12px}.auth-page{margin:20px auto;padding:0 13px 35px}.auth-card{padding:23px 19px}.auth-card h1{font-size:24px}.detail-wrap{padding:0 14px 40px;margin-top:20px}.detail-hero{grid-template-columns:1fr;gap:18px}.detail-photo{height:240px}.detail-copy h1{font-size:29px}.lang-picker button{padding:8px;font-size:10px}.description-panel,.locked-panel,.audio-box{padding:16px}.locked-panel{gap:10px}.lock-end{display:none}.login-layout{grid-template-columns:1fr}.login-art{display:none}.login-form{width:100%;max-width:430px;padding:50px 24px}.staff-shell{display:block}.sidebar{width:100%;min-height:auto;padding:12px;display:flex;flex-direction:row;align-items:center;gap:5px;overflow-x:auto}.staff-brand{padding:0;border:0;flex-shrink:0;margin-right:5px}.staff-brand>svg{width:33px;height:33px}.staff-brand b{font-size:12px}.staff-brand small,.side-caption,.sidebar-bottom{display:none}.side-link{white-space:nowrap;font-size:10px;padding:10px;gap:6px}.side-link svg{width:15px}.staff-top{height:48px;padding:0 14px;font-size:9px}.crumb{display:none}.staff-content{padding:17px 12px}.page-title{align-items:flex-start;flex-direction:column;gap:12px}.page-title h1{font-size:25px}.page-title .btn{width:100%}.panel{padding:14px;margin:12px 0}.panel-heading{align-items:flex-start;gap:10px}.panel-heading h2{font-size:13px}.panel-heading p{font-size:10px}.created-ticket{padding:16px;flex-direction:column;align-items:flex-start}.created-ticket h2{font-size:25px}.qr-frame{align-self:center}.metric-grid{grid-template-columns:1fr 1fr;gap:8px}.metric-card{padding:13px}.metric-card:last-child{grid-column:1/-1}.metric-card>strong{font-size:26px}.metric-foot{line-height:1.5}.dashboard-grid{grid-template-columns:1fr}.chart{height:240px}.staff-search{grid-template-columns:1fr}.staff-search .searchbox{grid-column:auto}.form-grid{grid-template-columns:1fr}.poi-form-modal{padding:22px 16px}.poi-form-modal h2{font-size:21px}.modal-actions{flex-wrap:wrap}.modal-actions .btn{flex:1}.account-form{align-items:stretch;flex-direction:column}.account-form label{min-width:0}.account-form .btn{width:100%}}
 @media print{body *{visibility:hidden}.created-ticket,.created-ticket *{visibility:visible}.created-ticket{position:absolute;left:0;top:0;width:100%;box-shadow:none;border:0}}
+.qr-url {
+  word-break: break-all;
+  font-size: 12px;
+}
+.locate-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.locate-actions select {
+  height: 44px;
+  border: 1px solid #d7e5d9;
+  border-radius: 12px;
+  background: white;
+  padding: 0 12px;
+  color: #345741;
+  font-size: 12px;
+  max-width: 190px;
+  min-width: 170px;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .locate-actions {
+    width: 100%;
+  }
+
+  .locate-actions select {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+
+  .locate-actions .btn {
+    width: auto;
+  }
+}
