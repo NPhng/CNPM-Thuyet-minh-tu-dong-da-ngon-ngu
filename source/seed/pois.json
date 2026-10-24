@@ -5,7 +5,7 @@
     "lat": 10.78755,
     "lon": 106.70528,
     "radius_m": 35,
-    "image_url": null,
+    "image_url": "/images/tcv-001.jpg",
     "category": "tien_ich",
     "species_name": null,
     "translations": {
@@ -37,7 +37,7 @@
     "lat": 10.78825,
     "lon": 106.70585,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-002.jpg",
     "category": "thu_an_co",
     "species_name": "Elephas maximus",
     "translations": {
@@ -69,7 +69,7 @@
     "lat": 10.78885,
     "lon": 106.70655,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-003.jpg",
     "category": "thu_an_thit",
     "species_name": "Panthera tigris tigris",
     "translations": {
@@ -101,7 +101,7 @@
     "lat": 10.78782,
     "lon": 106.70475,
     "radius_m": 40,
-    "image_url": null,
+    "image_url": "/images/tcv-004.jpg",
     "category": "tien_ich",
     "species_name": null,
     "translations": {
@@ -133,7 +133,7 @@
     "lat": 10.78915,
     "lon": 106.70505,
     "radius_m": 40,
-    "image_url": null,
+    "image_url": "/images/tcv-005.jpg",
     "category": "tien_ich",
     "species_name": null,
     "translations": {
@@ -165,7 +165,7 @@
     "lat": 10.78840,
     "lon": 106.70490,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-006.jpg",
     "category": "linh_truong",
     "species_name": "Macaca fascicularis",
     "translations": {
@@ -197,7 +197,7 @@
     "lat": 10.78895,
     "lon": 106.70485,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-007.jpg",
     "category": "linh_truong",
     "species_name": "Nomascus leucogenys",
     "translations": {
@@ -229,7 +229,7 @@
     "lat": 10.78850,
     "lon": 106.70690,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-008.jpg",
     "category": "bo_sat_luong_cu",
     "species_name": "Crocodylus siamensis",
     "translations": {
@@ -261,7 +261,7 @@
     "lat": 10.78790,
     "lon": 106.70620,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-009.jpg",
     "category": "bo_sat_luong_cu",
     "species_name": "Trionychidae / Geoemydidae",
     "translations": {
@@ -293,7 +293,7 @@
     "lat": 10.78940,
     "lon": 106.70560,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-010.jpg",
     "category": "chim",
     "species_name": null,
     "translations": {
@@ -325,7 +325,7 @@
     "lat": 10.78900,
     "lon": 106.70620,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-011.jpg",
     "category": "chim",
     "species_name": "Phoenicopterus roseus",
     "translations": {
@@ -357,7 +357,7 @@
     "lat": 10.78870,
     "lon": 106.70520,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-012.jpg",
     "category": "chim",
     "species_name": "Pavo cristatus",
     "translations": {
@@ -389,7 +389,7 @@
     "lat": 10.78950,
     "lon": 106.70470,
     "radius_m": 35,
-    "image_url": null,
+    "image_url": "/images/tcv-013.jpg",
     "category": "thu_an_co",
     "species_name": "Axis axis",
     "translations": {
@@ -421,7 +421,7 @@
     "lat": 10.78810,
     "lon": 106.70680,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-014.jpg",
     "category": "thu_an_co",
     "species_name": "Hippopotamus amphibius",
     "translations": {
@@ -453,7 +453,7 @@
     "lat": 10.78920,
     "lon": 106.70670,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-015.jpg",
     "category": "thu_an_thit",
     "species_name": "Panthera leo",
     "translations": {
@@ -485,7 +485,7 @@
     "lat": 10.78860,
     "lon": 106.70710,
     "radius_m": 25,
-    "image_url": null,
+    "image_url": "/images/tcv-016.jpg",
     "category": "thu_an_thit",
     "species_name": "Helarctos malayanus",
     "translations": {
@@ -517,7 +517,7 @@
     "lat": 10.78970,
     "lon": 106.70590,
     "radius_m": 30,
-    "image_url": null,
+    "image_url": "/images/tcv-017.jpg",
     "category": "thu_an_co",
     "species_name": "Rhinoceros unicornis",
     "translations": {
@@ -549,7 +549,7 @@
     "lat": 10.78800,
     "lon": 106.70550,
     "radius_m": 35,
-    "image_url": null,
+    "image_url": "/images/tcv-018.jpg",
     "category": "tien_ich",
     "species_name": "Nelumbo nucifera",
     "translations": {
@@ -581,7 +581,7 @@
     "lat": 10.78770,
     "lon": 106.70570,
     "radius_m": 20,
-    "image_url": null,
+    "image_url": "/images/tcv-019.jpg",
     "category": "tien_ich",
     "species_name": null,
     "translations": {
@@ -613,7 +613,7 @@
     "lat": 10.78740,
     "lon": 106.70490,
     "radius_m": 20,
-    "image_url": null,
+    "image_url": "/images/tcv-020.jpg",
     "category": "tien_ich",
     "species_name": null,
     "translations": {
