@@ -2,8 +2,9 @@ import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Routes,Route,Link,useNavigate,useParams,useSearchParams,Navigate} from 'react-router-dom';
 import {MapContainer,TileLayer,Marker,Popup,Circle,Tooltip as LeafletTooltip,useMap,useMapEvents} from 'react-leaflet';
 import L from 'leaflet'; import {QRCodeSVG} from 'qrcode.react'; import {BarChart,Bar,LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,Legend} from 'recharts';
-import {Leaf,Ticket,MapPin,Search,LocateFixed,Headphones,LockKeyhole,LogOut,LayoutDashboard,PawPrint,Users,Plus,RefreshCw,Trash2,Edit3,Copy,CheckCircle,AlertCircle,Menu,Volume2} from 'lucide-react';
+import {Leaf,Ticket,MapPin,Search,LocateFixed,Headphones,LockKeyhole,LogOut,LayoutDashboard,PawPrint,Users,Plus,RefreshCw,Trash2,Edit3,Copy,CheckCircle,AlertCircle,Menu,Volume2,Camera,X} from 'lucide-react';
 import {authApi,contentApi,audioApi,ApiError} from './api/client'; import {languages,labels,Lang} from './i18n';
+import { Html5Qrcode } from 'html5-qrcode';
 type POI={id:string;name?:string;lat:number;lon:number;radius_m?:number;category:string;species_name?:string;image_url?:string;translations?:Record<string,{name?:string;description?:string}>;description?:string;distance_m?:number};
 const cats=[['','Tất cả'],['thu_an_thit','Thú ăn thịt'],['thu_an_co','Thú ăn cỏ'],['chim','Chim'],['bo_sat_luong_cu','Bò sát & lưỡng cư'],['linh_truong','Linh trưởng'],['tien_ich','Tiện ích']];
 const TILE=import.meta.env.VITE_TILE_URL||'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -159,8 +160,176 @@ function GuestHome({ticket}:{ticket:ReturnType<typeof useTicket>}){
  
  return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/><main className="guest-wrap"><section className="hero"><div className="hero-copy"><span className="eyebrow"><Leaf size={15}/> KHÁM PHÁ THIÊN NHIÊN</span><h1>Mỗi bước chân,<br/><em>một câu chuyện.</em></h1><p>Khám phá các loài động vật và nghe thuyết minh đa ngôn ngữ tại Thảo Cầm Viên Sài Gòn.</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>{setTab('list');document.getElementById('explore')?.scrollIntoView({behavior:'smooth'})}}>Khám phá điểm tham quan <MapPin size={17}/></button><button className="btn btn-outline" onClick={()=>void openTicket()}><Ticket size={17}/> Vé của tôi</button></div></div><div className="hero-art"><span>🌿</span><div className="hero-animal">🦒</div><span>🍃</span></div></section><section className="info-grid"><article className="info-card"><span className="info-icon">☀️</span><div><b>Giờ mở cửa</b><p>Thông tin cần xác nhận và cập nhật</p></div></article><article className="info-card"><span className="info-icon">📍</span><div><b>Địa chỉ</b><p>2 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM</p></div></article><article className="info-card"><span className="info-icon">🌱</span><div><b>Về sở thú</b><p>Nội dung giới thiệu chính thức cần cập nhật</p></div></article></section><section id="explore" className="explore"><div className="section-heading"><div><span className="eyebrow">BẢN ĐỒ TƯƠNG TÁC</span><h2>Đi đâu tiếp nhỉ?</h2><p>Tìm kiếm và khám phá các điểm tham quan quanh bạn.</p></div><div className="locate-actions">{(gpsFailed||manualId)&&<select aria-label="Tôi đang ở" value={manualId} onChange={e=>setManualId(e.target.value)}><option value="">Tôi đang ở…</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{p.translations?.vi?.name||p.name||p.id}</option>)}</select>}<button className="btn btn-outline" onClick={()=>void findNearby()}><LocateFixed size={17}/> Điểm gần tôi</button></div></div><div className="search-row"><div className="searchbox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Tìm tên điểm tham quan..."/></div><select aria-label="Chọn điểm đến" value={destId} onChange={e=>{setDestId(e.target.value);setTab('map')}}><option value="">Chọn điểm đến</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{p.translations?.vi?.name||p.name||p.id}</option>)}</select><select aria-label="Bán kính tìm kiếm" value={radius} onChange={e=>setRadius(e.target.value)}><option value="100">Trong 100 m</option><option value="300">Trong 300 m</option><option value="500">Trong 500 m</option><option value="all">Tất cả</option></select></div>{gpsMsg&&<p className="gps-note"><LocateFixed size={15}/>{gpsMsg}</p>}{usingManual&&<p className="gps-note"><MapPin size={15}/>Vị trí bạn chọn: <b>{manualPoi?.translations?.vi?.name||manualPoi?.name}</b>. Sẽ tự đổi sang GPS khi có tín hiệu.</p>}{dest&&<><PoiCard poi={{...dest,distance_m:pos?distanceM(pos,[dest.lat,dest.lon]):undefined}}/>{!pos&&<p className="gps-note">Bật định vị hoặc chọn "Tôi đang ở…" để xem khoảng cách.</p>}</>}<div className="tabs"><button className={tab==='map'?'active':''} onClick={()=>setTab('map')}>Bản đồ</button><button className={tab==='list'?'active':''} onClick={()=>setTab('list')}>Danh sách {nearby?`(${nearby.length})`:''}</button></div>{err&&<div className="notice error"><AlertCircle size={18}/>{err}<button onClick={()=>void load()}>Thử lại</button></div>}{loading?<div className="skeleton large"/>:<div className="explore-content">{tab==='map'?<MapView pois={filtered} position={pos} manual={usingManual} focus={dest?[dest.lat,dest.lon]:null}/>:<div className="poi-list">{(nearby||filtered).filter(p=>!query||(p.translations?.vi?.name||p.name||p.id).toLowerCase().includes(query.toLowerCase())).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{tab==='map'&&<div className="poi-list map-list">{filtered.slice(0,5).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{!filtered.length&&<div className="empty"><PawPrint/><b>Chưa tìm thấy điểm tham quan</b><span>Thử đổi từ khóa hoặc bộ lọc nhé.</span></div>}</div>}</section><footer>© Thảo Cầm Viên Sài Gòn · Cùng khám phá và bảo tồn thiên nhiên</footer></main>{ticketModal}</>}
 function PoiCard({poi:p}:{poi:POI}){return <Link className="poi-card" to={`/poi/${p.id}`}><div className="poi-thumb">{p.image_url?<img src={p.image_url} alt=""/>:<span>{p.category==='chim'?'🐦':p.category==='thu_an_thit'?'🦁':p.category==='thu_an_co'?'🦒':'🌿'}</span>}</div><div className="poi-card-copy"><span className="category">{cats.find(c=>c[0]===p.category)?.[1]||p.category}</span><b>{p.translations?.vi?.name||p.name||p.id}</b><p>{p.translations?.vi?.description||p.species_name||'Khám phá điểm tham quan này.'}</p>{p.distance_m!==undefined&&<small><MapPin size={13}/>{p.distance_m<1000?`${Math.round(p.distance_m)} m`:`${(p.distance_m/1000).toFixed(1)} km`}</small>}</div><span className="arrow">↗</span></Link>}
+function QrScanner({
+  onDetected,
+  onClose,
+}: {
+  onDetected: (text: string) => void;
+  onClose: () => void;
+}) {
+  const [error, setError] = useState('');
+  const [starting, setStarting] = useState(true);
+
+  useEffect(() => {
+    let disposed = false;
+    let handled = false;
+    let started = false;
+    let scanner: Html5Qrcode | null = null;
+
+    const stopScanner = async () => {
+      if (!scanner) return;
+      if (started) {
+        try {
+          await scanner.stop();
+        } catch {
+          // Camera may already have stopped.
+        } finally {
+          started = false;
+        }
+      }
+      try {
+        scanner.clear();
+      } catch {
+        // The scan region may already be cleared.
+      }
+    };
+
+    const startScanner = async () => {
+      const ua = navigator.userAgent;
+      const embeddedBrowser =
+        /\bZalo\b/i.test(ua) ||
+        /\bFBAN\b|\bFBAV\b|\bFB_IAB\b/i.test(ua) ||
+        /\bInstagram\b/i.test(ua);
+
+      if (embeddedBrowser) {
+        setError(
+          'Bạn đang mở trang trong trình duyệt nhúng. Hãy mở bằng Safari hoặc Chrome, hoặc nhập mã vé thủ công.',
+        );
+        setStarting(false);
+        return;
+      }
+
+      if (!window.isSecureContext) {
+        setError('Camera cần HTTPS hoặc localhost. Hãy nhập mã vé thủ công.');
+        setStarting(false);
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setError('Trình duyệt không hỗ trợ camera. Hãy mở bằng Safari hoặc Chrome, hoặc nhập mã thủ công.');
+        setStarting(false);
+        return;
+      }
+
+      try {
+        scanner = new Html5Qrcode('activate-qr-reader');
+        await scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText: string) => {
+            if (handled || disposed) return;
+            handled = true;
+            onDetected(decodedText);
+          },
+          () => {
+            // A frame without a QR code is normal; keep scanning.
+          },
+        );
+
+        started = true;
+        if (disposed) {
+          await stopScanner();
+          return;
+        }
+        setStarting(false);
+      } catch {
+        if (!disposed) {
+          setError(
+            'Không mở được camera. Hãy cấp quyền camera, mở bằng Safari/Chrome hoặc nhập mã vé thủ công.',
+          );
+          setStarting(false);
+        }
+        await stopScanner();
+      }
+    };
+
+    void startScanner();
+    return () => {
+      disposed = true;
+      void stopScanner();
+    };
+  }, [onDetected]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section
+        className="modal qr-scan-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="qr-scan-title"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: 'min(100% - 24px, 480px)', maxHeight: '90dvh', overflowY: 'auto' }}
+      >
+        <button type="button" className="close" aria-label="Đóng trình quét QR" onClick={onClose}>
+          <X />
+        </button>
+        <h2 id="qr-scan-title">Quét mã QR trên vé</h2>
+        <p>Đưa mã QR vào giữa khung hình.</p>
+        <div id="activate-qr-reader" style={{ width: '100%', margin: '16px 0', overflow: 'hidden', borderRadius: 12 }} />
+        {starting && !error && <p>Đang khởi động camera…</p>}
+        {error && <div className="notice error" role="alert">{error}</div>}
+        <button type="button" className="btn btn-outline full" onClick={onClose}>
+          Đóng và nhập mã thủ công
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function extractTicketCode(raw: string): string | null {
+  const value = raw.trim();
+
+  // QR may contain an absolute URL or a relative /activate?code=... link.
+  if (/^(https?:\/\/|\/activate(?:\?|$))/i.test(value)) {
+    try {
+      const url = new URL(value, window.location.origin);
+      if (url.pathname.replace(/\/+$/, '') !== '/activate') return null;
+      const code = url.searchParams.get('code');
+      if (!code) return null;
+      return extractTicketCode(code);
+    } catch {
+      return null;
+    }
+  }
+
+  const code = value.replace(/\s/g, '').toUpperCase();
+  // Ticket codes use at least one hyphen, e.g. TCV-ABC123.
+  if (!/^[A-Z0-9]+(?:-[A-Z0-9]+)+$/.test(code)) return null;
+  return code;
+}
 function Activate({ticket}:{ticket:ReturnType<typeof useTicket>}){
- const {onHeaderTicket,ticketModal}=useTicketModal(ticket);const [params]=useSearchParams(),[code,setCode]=useState((params.get('code')||'').replace(/\s/g,'').toUpperCase()),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[confirm,setConfirm]=useState(false),[replaceAsk,setReplaceAsk]=useState(false),[success,setSuccess]=useState(false),[expiry,setExpiry]=useState('');const nav=useNavigate();const submit = async (
+ const {onHeaderTicket,ticketModal}=useTicketModal(ticket);const [params]=useSearchParams(),[code,setCode]=useState((params.get('code')||'').replace(/\s/g,'').toUpperCase()),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[confirm,setConfirm]=useState(false),[replaceAsk,setReplaceAsk]=useState(false),[success,setSuccess]=useState(false),[expiry,setExpiry]=useState('');const nav=useNavigate();
+const [scanOpen, setScanOpen] = useState(false);
+const [scanError, setScanError] = useState('');
+
+const handleQrDetected = useCallback((raw: string) => {
+  const extracted = extractTicketCode(raw);
+
+  if (!extracted) {
+    setScanError(
+      'QR không hợp lệ hoặc không chứa mã kích hoạt. ' +
+      'Hãy thử lại hoặc nhập mã vé thủ công.',
+    );
+    setScanOpen(false);
+    return;
+  }
+
+  setCode(extracted);
+  setErr('');
+  setScanError('');
+  setScanOpen(false);
+}, []);
+const submit = async (
   switchDevice = false,
   skipReplaceAsk = false
 ) => {
@@ -169,7 +338,7 @@ function Activate({ticket}:{ticket:ReturnType<typeof useTicket>}){
     return;
   }
 
-  setBusy(true);setErr('');try{const d:any=await authApi.activate({code:code.replace(/\s/g,'').toUpperCase(),device_id:deviceId(),confirm_device_switch:switchDevice});ticket.save(d.ticket_token||d.token,d.expires_at);setExpiry(d.expires_at||'');setSuccess(true);setConfirm(false)}catch(e:any){if(e instanceof ApiError&&e.status===409&&(e.code==='used_on_other_device'||String(e.message).includes('confirm_required'))){setConfirm(true)}else if(e instanceof ApiError&&e.status===404) setErr('Mã vé không đúng');else if(e instanceof ApiError&&e.status===410)setErr('Vé đã hết hạn');else if(e instanceof ApiError&&e.status===429)setErr('Thử quá nhiều lần, vui lòng đợi ít phút');else setErr(errorText(e))}finally{setBusy(false)}};useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">← Về trang chủ</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>Kích hoạt thành công!</h1><p>Vé đã được liên kết với thiết bị này. Chúc bạn có chuyến tham quan vui vẻ.</p>{expiry&&<p>Hết hạn: <b>{fmtDate(expiry)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>Về trang chủ</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>Đi nghe thuyết minh</button></>:<><span className="eyebrow">MỞ KHÓA TRẢI NGHIỆM</span><h1>Kích hoạt vé tham quan</h1><p>Nhập mã trên vé của bạn để mở khóa thuyết minh âm thanh.</p><label htmlFor="ticket-code">Mã vé</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder="VD: TCV-ABC123" autoComplete="off"/>{err&&<div className="notice error"><AlertCircle/>{err}<button onClick={()=>void submit(false,true)}>Thử lại</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?'Đang kích hoạt…':'Kích hoạt vé'}</button><p className="fine-print"><LockKeyhole size={14}/> Vé chỉ có thể nghe trên một thiết bị tại một thời điểm.</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>Chuyển vé sang thiết bị này?</h2><p>Vé này đã dùng ở máy khác. Chuyển sang máy này? Máy cũ sẽ không nghe được nữa.</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>Hủy</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>Đồng ý chuyển</button></div></section></div>}
+  setBusy(true);setErr('');try{const d:any=await authApi.activate({code:code.replace(/\s/g,'').toUpperCase(),device_id:deviceId(),confirm_device_switch:switchDevice});ticket.save(d.ticket_token||d.token,d.expires_at);setExpiry(d.expires_at||'');setSuccess(true);setConfirm(false)}catch(e:any){if(e instanceof ApiError&&e.status===409&&(e.code==='used_on_other_device'||String(e.message).includes('confirm_required'))){setConfirm(true)}else if(e instanceof ApiError&&e.status===404) setErr('Mã vé không đúng');else if(e instanceof ApiError&&e.status===410)setErr('Vé đã hết hạn');else if(e instanceof ApiError&&e.status===429)setErr('Thử quá nhiều lần, vui lòng đợi ít phút');else setErr(errorText(e))}finally{setBusy(false)}};useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">← Về trang chủ</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>Kích hoạt thành công!</h1><p>Vé đã được liên kết với thiết bị này. Chúc bạn có chuyến tham quan vui vẻ.</p>{expiry&&<p>Hết hạn: <b>{fmtDate(expiry)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>Về trang chủ</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>Đi nghe thuyết minh</button></>:<><span className="eyebrow">MỞ KHÓA TRẢI NGHIỆM</span><h1>Kích hoạt vé tham quan</h1><p>Nhập mã trên vé của bạn để mở khóa thuyết minh âm thanh.</p><label htmlFor="ticket-code">Mã vé</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder="VD: TCV-ABC123" autoComplete="off"/><button type="button" className="btn btn-outline full" onClick={()=>{setScanError('');setScanOpen(true)}}><Camera size={17}/> Quét mã QR</button>{scanError&&<div className="notice error" role="alert"><AlertCircle/>{scanError}</div>}{err&&<div className="notice error"><AlertCircle/>{err}<button onClick={()=>void submit(false,true)}>Thử lại</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?'Đang kích hoạt…':'Kích hoạt vé'}</button><p className="fine-print"><LockKeyhole size={14}/> Vé chỉ có thể nghe trên một thiết bị tại một thời điểm.</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>Chuyển vé sang thiết bị này?</h2><p>Vé này đã dùng ở máy khác. Chuyển sang máy này? Máy cũ sẽ không nghe được nữa.</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>Hủy</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>Đồng ý chuyển</button></div></section></div>}
 {replaceAsk && (
   <div className="modal-backdrop">
     <section className="modal">
@@ -198,6 +367,7 @@ function Activate({ticket}:{ticket:ReturnType<typeof useTicket>}){
     </section>
   </div>
 )}
+{scanOpen && <QrScanner onDetected={handleQrDetected} onClose={() => setScanOpen(false)} />}
 </>}
 function AudioPlayer({id,lang,token,onUnauthorized,onListen}:{id:string;lang:Lang;token:string;onUnauthorized:()=>void;onListen:()=>void}){const [url,setUrl]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[playing,setPlaying]=useState(false),[progress,setProgress]=useState(0),[duration,setDuration]=useState(0);const ref=useRef<HTMLAudioElement>(null);const load=async()=>{setBusy(true);setErr('');try{const blob=await audioApi.visitor(id,lang,token);const next=URL.createObjectURL(blob);setUrl(old=>{if(old)URL.revokeObjectURL(old);return next});}catch(e:any){if (e instanceof ApiError && e.status === 401) {
   onUnauthorized();
@@ -261,7 +431,6 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
       setTickets(d.tickets||d.items||d||[]);
       setErr('');
     }catch(e){
-      // Lỗi 7: Token hết hạn thì đăng xuất
       handleStaffError(e,staff,nav,setErr);
     }
   },[staff.token,nav]);
@@ -560,7 +729,6 @@ function PoiForm({
       onClose();
 
     }catch(e){
-      // LỖI 7: Token nhân viên hết hạn
       if(e instanceof ApiError&&e.status===401){
         onUnauthorized();
       }else{
@@ -589,7 +757,6 @@ function PoiForm({
       });
 
     }catch(e){
-      // LỖI 7: Token nhân viên hết hạn
       if(e instanceof ApiError&&e.status===401){
         onUnauthorized();
       }else{
@@ -820,7 +987,6 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
       await contentApi.deletePoi(p.id,staff.token);
       await load();
     }catch(e){
-      // Lỗi 7: Token hết hạn thì đăng xuất
       handleStaffError(e,staff,nav,setErr);
     }
   };
@@ -996,7 +1162,6 @@ function Accounts({staff}:{staff:ReturnType<typeof useStaff>}){
       setUsers(d.users||d||[]);
       setErr('');
     }catch(e){
-      // Lỗi 7: Token hết hạn thì đăng xuất
       handleStaffError(e,staff,nav,setErr);
     }
   },[staff.token,nav]);
@@ -1022,7 +1187,6 @@ function Accounts({staff}:{staff:ReturnType<typeof useStaff>}){
       await load();
 
     }catch(e){
-      // Lỗi 7: Token hết hạn thì đăng xuất
       handleStaffError(e,staff,nav,setErr);
     }finally{
       setBusy(false);
@@ -1041,7 +1205,6 @@ function Accounts({staff}:{staff:ReturnType<typeof useStaff>}){
       await load();
 
     }catch(e){
-      // Lỗi 7: Token hết hạn thì đăng xuất
       handleStaffError(e,staff,nav,setErr);
     }
   };
