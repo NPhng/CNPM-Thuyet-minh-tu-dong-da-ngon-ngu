@@ -55,3 +55,6 @@
   .qr-scan-modal .qr-reader-wrap { min-height: 220px; }
   .qr-scan-modal #activate-qr-reader { min-height: 210px; }
 }
+.topbar-actions{display:flex;align-items:center;gap:10px}
+.lang-select{height:42px;border-radius:12px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;padding:0 10px;font-size:13px;font-weight:700}
+.lang-select option{color:#052e16}
