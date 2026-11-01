@@ -1,116 +1,119 @@
-from fastapi import FastAPI, HTTPException, Header
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
-import httpx
-import uuid
-import time
+"""
+Content Service — POI MongoDB, bản dịch 5 ngôn ngữ, kích hoạt TTS nội bộ.
+Đọc POI (danh sách, chi tiết, nearby) là công khai, không cần vé.
+CRUD chỉ admin.
+Giai đoạn 4: du khách gửi sự kiện listen/enter/exit (POST /events, cần ticket_token);
+admin xem thống kê (/stats/*). Định nghĩa các con số nằm ở đầu file stats.py.
+"""
 
-AUTH_SERVICE_URL = "http://auth-service:8001"  
-poi_db = {
-    "tcv-001": {
-        "id": "tcv-001",
-        "name": "Cổng Chính",
-        "name_en": "Main Gate",
-        "description_vi": (
-            "Cổng chính Thảo Cầm Viên Sài Gòn được xây dựng từ năm 1864, "
-            "là biểu tượng lịch sử hơn 160 năm của vườn thú lâu đời nhất Việt Nam. "
-            "Cổng mang kiến trúc Pháp cổ điển, là điểm chụp ảnh yêu thích của du khách."
-        ),
-        "description_en": (
-            "The main gate of Saigon Zoo and Botanical Gardens, built in 1864, "
-            "is a historic symbol of Vietnam's oldest zoo with over 160 years of history. "
-            "It features classic French architecture and is a popular photography spot."
-        ),
-        "latitude": 10.7876,
-        "longitude": 106.7053,
-        "radius_m": 35,
-        "created_at": time.time()
-    },
-    "tcv-002": {
-        "id": "tcv-002",
-        "name": "Khu Voi Châu Á",
-        "name_en": "Asian Elephant Zone",
-        "description_vi": (
-            "Khu nuôi voi Châu Á là một trong những điểm hấp dẫn nhất của Thảo Cầm Viên. "
-            "Hiện vườn đang chăm sóc 3 cá thể voi Châu Á, trong đó có 1 voi con sinh năm 2019. "
-            "Voi Châu Á nhỏ hơn voi Châu Phi và có tai nhỏ hơn, đặc trưng bởi chiếc vòi linh hoạt."
-        ),
-        "description_en": (
-            "The Asian Elephant zone is one of the most attractive areas of the zoo. "
-            "The zoo currently cares for 3 Asian elephants, including one calf born in 2019. "
-            "Asian elephants are smaller than African elephants with distinctive smaller ears."
-        ),
-        "latitude": 10.7882,
-        "longitude": 106.7058,
-        "radius_m": 30,
-        "created_at": time.time()
-    },
-    "tcv-003": {
-        "id": "tcv-003",
-        "name": "Khu Hổ Trắng Bengal",
-        "name_en": "Bengal White Tiger Zone",
-        "description_vi": (
-            "Hổ trắng Bengal là loài cực kỳ quý hiếm, kết quả của đột biến gen tự nhiên. "
-            "Thảo Cầm Viên là một trong số ít vườn thú tại Việt Nam nuôi dưỡng thành công loài này. "
-            "Hổ trắng có bộ lông trắng với sọc đen, mắt xanh dương đặc trưng."
-        ),
-        "description_en": (
-            "The Bengal White Tiger is an extremely rare species resulting from a natural genetic mutation. "
-            "Saigon Zoo is one of the few zoos in Vietnam to successfully house this species. "
-            "White tigers have white fur with black stripes and characteristic blue eyes."
-        ),
-        "latitude": 10.7888,
-        "longitude": 106.7065,
-        "radius_m": 30,
-        "created_at": time.time()
-    },
-    "tcv-004": {
-        "id": "tcv-004",
-        "name": "Bảo Tàng Lịch Sử",
-        "name_en": "History Museum",
-        "description_vi": (
-            "Bảo Tàng Lịch Sử Việt Nam tại TP.HCM nằm ngay trong khuôn viên Thảo Cầm Viên. "
-            "Nơi đây lưu giữ hơn 40.000 hiện vật lịch sử từ thời tiền sử đến thế kỷ 20, "
-            "bao gồm các cổ vật Óc Eo, đồ gốm Chăm Pa và nhiều bảo vật quốc gia."
-        ),
-        "description_en": (
-            "The Vietnam History Museum in Ho Chi Minh City is located within the zoo grounds. "
-            "It houses over 40,000 historical artifacts from prehistoric times to the 20th century, "
-            "including Óc Eo relics, Cham pottery, and many national treasures."
-        ),
-        "latitude": 10.7878,
-        "longitude": 106.7048,
-        "radius_m": 40,
-        "created_at": time.time()
-    },
-    "tcv-005": {
-        "id": "tcv-005",
-        "name": "Vườn Thực Vật Cổ Thụ",
-        "name_en": "Ancient Botanical Garden",
-        "description_vi": (
-            "Vườn thực vật với hàng trăm cây cổ thụ hàng trăm năm tuổi là lá phổi xanh của thành phố. "
-            "Nơi đây có hơn 1.800 loài thực vật nhiệt đới, trong đó có nhiều loài quý hiếm. "
-            "Bóng mát của những tán cây cổ thụ tạo nên không gian yên bình giữa lòng đô thị."
-        ),
-        "description_en": (
-            "The botanical garden with hundreds of ancient trees is the green lung of the city. "
-            "It houses over 1,800 tropical plant species, including many rare varieties. "
-            "The shade of ancient tree canopies creates a peaceful space in the heart of the city."
-        ),
-        "latitude": 10.7891,
-        "longitude": 106.7050,
-        "radius_m": 35,
-        "created_at": time.time()
-    }
-}
+from __future__ import annotations
+
+import asyncio
+import logging
+import math
+import os
+import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from datetime import date as date_type
+from typing import Literal, Optional
+
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Response
+from fastapi.middleware.cors import CORSMiddleware
+from motor.motor_asyncio import AsyncIOMotorClient
+from pydantic import BaseModel, Field, model_validator
+
+import stats
+from audio_client import delete_poi_audio, generate_poi_audio, warmup_all_audio
+from event_service import EventIngestor, serialize_event
+from event_store import MemoryEventStore, MemoryTicketStore, MongoEventStore, MongoTicketStore
+from events_core import EventError, load_settings, vn_date_of
+from jwt_auth import invalidate_ticket_cache, require_roles, require_valid_ticket, set_ticket_lookup
+from poi_store import (
+    CATEGORIES,
+    LANGS,
+    MemoryPoiStore,
+    MongoPoiStore,
+    changed_translation_langs,
+    empty_audio_status,
+    normalize_poi,
+    public_poi,
+)
+
+log = logging.getLogger("content")
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "zoo")
+TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
+
+db_client: Optional[AsyncIOMotorClient] = None
+store = MemoryPoiStore()
+event_store = MemoryEventStore()
+ticket_store = MemoryTicketStore()
+ingestor: Optional[EventIngestor] = None
+
+
+def get_store():
+    return store
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _make_ingestor() -> EventIngestor:
+    # lambda để luôn dùng now_utc hiện tại của module (test có thể thay bằng đồng hồ giả)
+    return EventIngestor(event_store, clock=lambda: now_utc())
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global db_client, store, event_store, ticket_store, ingestor
+    invalidate_ticket_cache()
+    if TESTING:
+        store = MemoryPoiStore()
+        await store.seed_if_empty()
+        event_store = MemoryEventStore()
+        ticket_store = MemoryTicketStore()
+        set_ticket_lookup(lambda ticket_id: ticket_store.find(ticket_id))
+        ingestor = _make_ingestor()
+        yield
+        return
+
+    # tz_aware: đọc datetime từ Mongo ra có tzinfo=UTC (không bị hiểu nhầm giờ địa phương)
+    db_client = AsyncIOMotorClient(MONGO_URI, tz_aware=True)
+    db = db_client[DB_NAME]
+    await db["pois"].create_index("id", unique=True)
+    await db["pois"].create_index("category")
+    store = MongoPoiStore(db)
+    event_store = MongoEventStore(db)
+    ticket_store = MongoTicketStore(db)
+    await event_store.ensure_indexes()
+    set_ticket_lookup(lambda ticket_id: ticket_store.find(ticket_id))
+    ingestor = _make_ingestor()
+    inserted = await store.seed_if_empty()
+    log.info("Seed POI mới: %s", inserted)
+    asyncio.create_task(_warmup_audio_later())
+    yield
+    db_client.close()
+    db_client = None
+
+
+async def _warmup_audio_later():
+    """Chạy nền, không chặn khởi động. Thử lại vài lần nếu Audio Service chưa sẵn sàng."""
+    for attempt in range(5):
+        await asyncio.sleep(3 * (attempt + 1))
+        if await warmup_all_audio():
+            return
+    log.warning("Warmup audio không thành công sau 5 lần; audio sẽ sinh khi có request.")
+
 
 app = FastAPI(
     title="Zoo Content Service",
-    description="Service quản lý nội dung địa điểm (POI) - Thảo Cầm Viên Sài Gòn",
-    version="1.0.0"
+    description="POI Thảo Cầm Viên — MongoDB, bản dịch, kích hoạt audio",
+    version="4.0.0",
+    lifespan=lifespan,
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -118,39 +121,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-class POICreate(BaseModel):
-    """Dữ liệu để tạo địa điểm mới"""
-    name: str
-    name_en: str
-    description_vi: str
-    description_en: str
-    latitude: float
-    longitude: float
-    radius_m: float = 30.0
 
-async def verify_token_from_auth(authorization: str) -> dict:
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.get(
-                f"{AUTH_SERVICE_URL}/verify",
-                headers={"Authorization": authorization},
-                timeout=5.0
-            )
-            if response.status_code == 401:
-                raise HTTPException(status_code=401, detail="Token không hợp lệ hoặc đã hết hạn")
-            if response.status_code != 200:
-                raise HTTPException(status_code=502, detail="Auth Service lỗi")
-            return response.json()
-        except httpx.ConnectError:
-            raise HTTPException(
-                status_code=503,
-                detail="Auth Service không phản hồi - vui lòng thử lại sau"
-            )
+class Translation(BaseModel):
+    name: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+
+
+class POICreate(BaseModel):
+    name: Optional[str] = None
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    radius_m: float = Field(30.0, gt=0, description="Vùng kích hoạt của điểm (khác search_radius_m khi tìm kiếm)")
+    image_url: Optional[str] = None
+    category: str
+    species_name: Optional[str] = None
+    translations: dict[str, Translation]
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "name": "Khu Demo",
+                    "lat": 10.79,
+                    "lon": 106.71,
+                    "radius_m": 20,
+                    "category": "tien_ich",
+                    "translations": {
+                        "vi": {"name": "Khu Demo", "description": "Mô tả tiếng Việt hai câu. Câu hai."},
+                        "en": {"name": "Demo Zone", "description": "English description. Second sentence."},
+                    },
+                }
+            ]
+        }
+    }
+
+
+class POIUpdate(BaseModel):
+    name: Optional[str] = None
+    lat: Optional[float] = Field(None, ge=-90, le=90)
+    lon: Optional[float] = Field(None, ge=-180, le=180)
+    radius_m: Optional[float] = Field(None, gt=0)
+    image_url: Optional[str] = None
+    category: Optional[str] = None
+    species_name: Optional[str] = None
+    translations: Optional[dict[str, Translation]] = None
+
+
+class TranslationUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1)
+    description: Optional[str] = Field(None, min_length=1)
 
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    import math
-    R = 6371000  # Bán kính Trái Đất (mét)
+    R = 6371000
     phi1 = math.radians(lat1)
     phi2 = math.radians(lat2)
     dphi = math.radians(lat2 - lat1)
@@ -159,13 +182,63 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def visitor_poi(doc: dict) -> dict:
+    """Bản công khai cho du khách: không lộ audio_status (tên file, lỗi nội bộ)."""
+    return {k: v for k, v in public_poi(doc).items() if k != "audio_status"}
+
+
+def _mark_audio_pending(poi: dict, langs: list[str]) -> dict:
+    status = dict(poi.get("audio_status") or empty_audio_status())
+    for lang in langs:
+        status[lang] = {"status": "pending"}
+    return status
+
+
+def _validate_category(category: str) -> None:
+    if category not in CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"category không hợp lệ. Chọn: {sorted(CATEGORIES)}")
+
+
+def _translations_dump(translations: dict) -> dict:
+    out = {}
+    for lang, item in translations.items():
+        if lang not in LANGS:
+            raise HTTPException(status_code=400, detail=f"Ngôn ngữ không hỗ trợ: {lang}")
+        data = item.model_dump() if hasattr(item, "model_dump") else dict(item)
+        out[lang] = data
+    return out
+
+
+def _nearby_payload(pois: list[dict], lat: float, lon: float, search_radius_m: float) -> dict:
+    nearby = []
+    for poi in pois:
+        distance = calculate_distance(lat, lon, poi["lat"], poi["lon"])
+        if distance <= search_radius_m:
+            nearby.append(
+                {
+                    **visitor_poi(poi),
+                    "distance_m": round(distance, 1),
+                    "within_poi_radius": distance <= float(poi["radius_m"]),
+                }
+            )
+    nearby.sort(key=lambda x: x["distance_m"])
+    return {
+        "search_location": {"lat": lat, "lon": lon},
+        "search_radius_m": search_radius_m,
+        "found": len(nearby),
+        "pois": nearby,
+        "note": "search_radius_m là bán kính tìm kiếm GPS; radius_m là vùng kích hoạt của từng POI.",
+    }
+
+
 @app.get("/")
-def root():
+async def root():
+    pois = await get_store().list_all()
     return {
         "service": "Content Service",
-        "status": "đang chạy ",
-        "total_pois": len(poi_db),
-        "version": "1.0.0"
+        "status": "đang chạy",
+        "total_pois": len(pois),
+        "version": "4.0.0",
     }
 
 
@@ -175,106 +248,256 @@ def health_check():
 
 
 @app.get("/pois")
-def get_all_pois():
-    pois = list(poi_db.values())
-    return {
-        "total": len(pois),
-        "pois": pois
-    }
+async def get_all_pois(category: Optional[str] = None):
+    pois = await get_store().list_all()
+    if category:
+        pois = [p for p in pois if p.get("category") == category]
+    return {"total": len(pois), "pois": [visitor_poi(p) for p in pois]}
 
 
-@app.get("/pois/{poi_id}")
-def get_poi(poi_id: str):
-    poi = poi_db.get(poi_id)
-    if not poi:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Không tìm thấy địa điểm với ID '{poi_id}'"
-        )
-    return poi
+@app.get("/pois/nearby")
+async def search_nearby_pois(
+    lat: float = Query(...),
+    lon: float = Query(...),
+    search_radius_m: float = Query(50.0, gt=0, description="Bán kính tìm kiếm GPS, khác radius_m của POI"),
+):
+    pois = await get_store().list_all()
+    return _nearby_payload(pois, lat, lon, search_radius_m)
 
 
 @app.get("/pois/nearby/search")
-def search_nearby_pois(lat: float, lon: float, radius_m: float = 50.0):
-    nearby = []
-    for poi in poi_db.values():
-        distance = calculate_distance(lat, lon, poi["latitude"], poi["longitude"])
-        if distance <= radius_m:
-            nearby.append({
-                **poi,
-                "distance_m": round(distance, 1)  
-            })
+async def search_nearby_pois_alias(lat: float, lon: float, radius_m: float = 50.0):
+    """Alias cũ: radius_m ở đây là search_radius_m."""
+    pois = await get_store().list_all()
+    return _nearby_payload(pois, lat, lon, radius_m)
 
-    nearby.sort(key=lambda x: x["distance_m"])
 
-    return {
-        "search_location": {"lat": lat, "lon": lon},
-        "radius_m": radius_m,
-        "found": len(nearby),
-        "pois": nearby
-    }
+@app.get("/pois/{poi_id}")
+async def get_poi(poi_id: str):
+    poi = await get_store().find(poi_id)
+    if not poi:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm với ID '{poi_id}'")
+    return visitor_poi(poi)
+
+
+@app.get("/pois/{poi_id}/audio-status")
+async def get_poi_audio_status(poi_id: str, _: dict = Depends(require_roles("admin"))):
+    """Admin: trạng thái audio từng ngôn ngữ (pending / generating / ready / error)."""
+    poi = await get_store().find(poi_id)
+    if not poi:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+    return {"poi_id": poi_id, "audio_status": poi.get("audio_status") or empty_audio_status()}
 
 
 @app.post("/pois", status_code=201)
 async def create_poi(
     poi_data: POICreate,
-    authorization: Optional[str] = Header(None)
+    background_tasks: BackgroundTasks,
+    payload: dict = Depends(require_roles("admin")),
 ):
- 
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="Cần đăng nhập để thêm địa điểm. Gửi kèm Authorization: Bearer <token>"
-        )
+    _validate_category(poi_data.category)
+    translations = _translations_dump(poi_data.translations)
+    if "vi" not in translations:
+        raise HTTPException(status_code=400, detail="Cần bản dịch vi (name + description)")
+    new_id = f"tcv-{uuid.uuid4().hex[:8]}"
+    new_poi = normalize_poi(
+        {
+            "id": new_id,
+            "name": poi_data.name or translations["vi"]["name"],
+            "lat": poi_data.lat,
+            "lon": poi_data.lon,
+            "radius_m": poi_data.radius_m,
+            "image_url": poi_data.image_url,
+            "category": poi_data.category,
+            "species_name": poi_data.species_name,
+            "translations": translations,
+            "audio_status": empty_audio_status(),
+            "created_by": payload.get("username", "unknown"),
+            "created_at": now_utc().isoformat(),
+        }
+    )
+    await get_store().insert(new_poi)
+    langs = [lang for lang in LANGS if translations.get(lang, {}).get("description")]
+    background_tasks.add_task(generate_poi_audio, new_id, langs)
+    return {"message": "Thêm địa điểm thành công!", "poi": public_poi(new_poi)}
 
-    user_info = await verify_token_from_auth(authorization)
 
-    new_id = f"tcv-{str(uuid.uuid4())[:6]}"
+@app.put("/pois/{poi_id}")
+async def update_poi(
+    poi_id: str,
+    poi_data: POIUpdate,
+    background_tasks: BackgroundTasks,
+    payload: dict = Depends(require_roles("admin")),
+):
+    poi = await get_store().find(poi_id)
+    if not poi:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+    changes = poi_data.model_dump(exclude_none=True)
+    regen_langs: list[str] = []
+    if "category" in changes:
+        _validate_category(changes["category"])
+    if "translations" in changes:
+        new_tr = _translations_dump(changes["translations"])
+        merged = {**(poi.get("translations") or {}), **new_tr}
+        regen_langs = changed_translation_langs(poi, merged)
+        changes["translations"] = merged
+        if regen_langs:
+            changes["audio_status"] = _mark_audio_pending(poi, regen_langs)
+        if "vi" in merged:
+            changes["name"] = changes.get("name") or merged["vi"].get("name") or poi.get("name")
+    changes["updated_at"] = now_utc().isoformat()
+    changes["updated_by"] = payload.get("username")
+    updated = await get_store().replace_fields(poi_id, changes)
+    if regen_langs:
+        background_tasks.add_task(generate_poi_audio, poi_id, regen_langs)
+    return {"message": "Cập nhật địa điểm thành công!", "poi": public_poi(updated)}
 
-    new_poi = {
-        "id": new_id,
-        "name": poi_data.name,
-        "name_en": poi_data.name_en,
-        "description_vi": poi_data.description_vi,
-        "description_en": poi_data.description_en,
-        "latitude": poi_data.latitude,
-        "longitude": poi_data.longitude,
-        "radius_m": poi_data.radius_m,
-        "created_by": user_info.get("username", "unknown"),
-        "created_at": time.time()
+
+@app.patch("/pois/{poi_id}/translations/{lang}")
+async def patch_translation(
+    poi_id: str,
+    lang: str,
+    body: TranslationUpdate,
+    background_tasks: BackgroundTasks,
+    payload: dict = Depends(require_roles("admin")),
+):
+    if lang not in LANGS:
+        raise HTTPException(status_code=400, detail=f"Ngôn ngữ không hỗ trợ. Chọn: {list(LANGS)}")
+    poi = await get_store().find(poi_id)
+    if not poi:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+    translations = dict(poi.get("translations") or {})
+    current = dict(translations.get(lang) or {})
+    patch = body.model_dump(exclude_none=True)
+    if not patch:
+        raise HTTPException(status_code=400, detail="Không có trường nào để sửa")
+    current.update(patch)
+    if not current.get("name") or not current.get("description"):
+        raise HTTPException(status_code=400, detail="Bản dịch cần name và description")
+    translations[lang] = current
+    fields = {
+        "translations": translations,
+        "audio_status": _mark_audio_pending(poi, [lang]),
+        "updated_at": now_utc().isoformat(),
+        "updated_by": payload.get("username"),
     }
-
-    poi_db[new_id] = new_poi
-
-    return {
-        "message": "Thêm địa điểm thành công!",
-        "poi": new_poi
-    }
+    if lang == "vi":
+        fields["name"] = current["name"]
+    if changed_translation_langs(poi, translations):
+        updated = await get_store().replace_fields(poi_id, fields)
+        background_tasks.add_task(generate_poi_audio, poi_id, [lang])
+    else:
+        fields.pop("audio_status")
+        updated = await get_store().replace_fields(poi_id, fields)
+    return {"message": f"Đã cập nhật bản dịch {lang}", "poi": public_poi(updated)}
 
 
 @app.delete("/pois/{poi_id}")
 async def delete_poi(
     poi_id: str,
-    authorization: Optional[str] = Header(None)
+    background_tasks: BackgroundTasks,
+    payload: dict = Depends(require_roles("admin")),
 ):
-    
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="Cần đăng nhập để xóa địa điểm"
-        )
-
-    await verify_token_from_auth(authorization)
-
-    if poi_id not in poi_db:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Không tìm thấy địa điểm '{poi_id}'"
-        )
-
-    deleted_poi = poi_db.pop(poi_id)
-
+    deleted = await get_store().delete(poi_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+    background_tasks.add_task(delete_poi_audio, poi_id)
     return {
-        "message": f"Đã xóa địa điểm '{deleted_poi['name']}' thành công",
-        "deleted_poi_id": poi_id
+        "message": f"Đã xóa địa điểm '{deleted.get('name')}' thành công",
+        "deleted_poi_id": poi_id,
     }
+
+
+# ======================================================================
+# Giai đoạn 4 — ghi nhận sự kiện và thống kê
+# ======================================================================
+
+class EventCreate(BaseModel):
+    poi_id: str = Field(min_length=1, max_length=64)
+    type: Literal["listen", "enter", "exit"]
+    lat: Optional[float] = Field(None, ge=-90, le=90, description="Vị trí GPS hiện tại (tùy chọn; có thì server kiểm tra Haversine)")
+    lon: Optional[float] = Field(None, ge=-180, le=180)
+
+    @model_validator(mode="after")
+    def _lat_lon_together(self):
+        if (self.lat is None) != (self.lon is None):
+            raise ValueError("Cần gửi cả lat và lon, hoặc không gửi cả hai")
+        return self
+
+    model_config = {
+        "json_schema_extra": {"examples": [{"poi_id": "tcv-001", "type": "enter", "lat": 10.78755, "lon": 106.70528}]}
+    }
+
+
+def _event_http_error(exc: EventError) -> HTTPException:
+    return HTTPException(
+        status_code=exc.status,
+        detail={"error": exc.code, "message": exc.message},
+        headers=exc.headers or None,
+    )
+
+
+@app.post("/events", status_code=201)
+async def post_event(body: EventCreate, response: Response, ctx: dict = Depends(require_valid_ticket)):
+    """
+    Du khách (ticket_token) gửi listen / enter / exit.
+    - 201: đã ghi. 200 + `deduplicated: true`: trùng sự kiện ngay trước đó (không ghi thêm).
+    - 404: POI không tồn tại. 422: enter ngoài vùng / exit còn sâu trong vùng (khi có GPS).
+    - 429: gửi quá nhanh. `ts` do server đặt, trả về theo giờ VN.
+    """
+    ticket_id = ctx["ticket"].get("id") or ctx["payload"].get("ticket_id")
+    try:
+        ingestor.check_rate(ticket_id)
+        poi = await get_store().find(body.poi_id)
+        if not poi:
+            raise HTTPException(status_code=404, detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{body.poi_id}'"})
+        event, duplicate = await ingestor.record(
+            ticket_id=ticket_id, poi=poi, event_type=body.type, lat=body.lat, lon=body.lon
+        )
+    except EventError as exc:
+        raise _event_http_error(exc)
+    if duplicate:
+        response.status_code = 200
+    return {"event": serialize_event(event), "deduplicated": duplicate}
+
+
+@app.get("/events")
+async def list_events(
+    poi_id: Optional[str] = None,
+    ticket_id: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    _: dict = Depends(require_roles("admin")),
+):
+    """Admin: sự kiện mới nhất trước (kiểm tra dữ liệu, xem hoạt động gần đây)."""
+    docs = await event_store.recent(poi_id=poi_id, ticket_id=ticket_id, limit=limit)
+    return {"total": len(docs), "events": [serialize_event(d) for d in docs]}
+
+
+@app.get("/stats/overview")
+async def stats_overview(_: dict = Depends(require_roles("admin"))):
+    """Vé bán hôm nay + số vé đang hoạt động (có sự kiện trong N_ACTIVE_MINUTES phút gần nhất)."""
+    return await stats.build_overview(event_store, ticket_store, now_utc(), load_settings())
+
+
+@app.get("/stats/pois")
+async def stats_pois(_: dict = Depends(require_roles("admin"))):
+    """Từng điểm: số người đang ở trong điểm và lượt đi qua hôm nay."""
+    pois = await get_store().list_all()
+    return await stats.build_pois(event_store, pois, now_utc(), load_settings())
+
+
+@app.get("/stats/hourly")
+async def stats_hourly(
+    day: Optional[date_type] = Query(None, alias="date", description="YYYY-MM-DD theo giờ VN; mặc định hôm nay"),
+    _: dict = Depends(require_roles("admin")),
+):
+    """Chuỗi 24 giờ trong ngày (giờ VN) để vẽ biểu đồ."""
+    target = day or vn_date_of(now_utc())
+    return await stats.build_hourly(event_store, ticket_store, target)
+
+
+@app.get("/stats/dashboard")
+async def stats_dashboard(_: dict = Depends(require_roles("admin"))):
+    """Gộp overview + pois + hourly (hôm nay) trong một lần gọi cho dashboard."""
+    pois = await get_store().list_all()
+    return await stats.build_dashboard(event_store, ticket_store, pois, now_utc(), load_settings())
