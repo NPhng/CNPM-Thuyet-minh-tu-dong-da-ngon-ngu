@@ -1,0 +1,642 @@
+[
+  {
+    "id": "tcv-001",
+    "name": "Cổng Chính",
+    "lat": 10.78755,
+    "lon": 106.70528,
+    "radius_m": 35,
+    "image_url": "/images/tcv-001.jpg",
+    "category": "tien_ich",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Cổng Chính",
+        "description": "Cổng chính Thảo Cầm Viên Sài Gòn được xây năm 1864, mang kiến trúc Pháp cổ điển với hàng cột và mái vòm đặc trưng. Đây là biểu tượng hơn 160 năm của vườn thú lâu đời nhất Việt Nam. Du khách thường dừng lại chụp ảnh trước khi bắt đầu hành trình tham quan."
+      },
+      "en": {
+        "name": "Main Gate",
+        "description": "The main gate of Saigon Zoo and Botanical Gardens was built in 1864 in classic French colonial style, with distinctive columns and arches. It is the symbol of Vietnam’s oldest zoo, with more than 160 years of history. Visitors often pause here for photos before starting their walk."
+      },
+      "zh": {
+        "name": "正门",
+        "description": "西贡动植物园正门建于1864年，采用经典法式殖民建筑风格，柱廊与拱门十分醒目。它是越南最古老动物园160多年历史的象征。游客常在此拍照留念，再开始游览。"
+      },
+      "ja": {
+        "name": "正門",
+        "description": "サイゴン動植物園の正門は1864年に建てられたクラシックなフランス植民地様式で、円柱とアーチが印象的です。ベトナム最古の動物園、160年以上の歴史の象徴です。多くの来園者がここで写真を撮ってから散策を始めます。"
+      },
+      "ko": {
+        "name": "정문",
+        "description": "사이공 동식물원 정문은 1864년에 지어진 고전적인 프랑스 식민지 양식으로, 기둥과 아치가 돋보입니다. 베트남에서 가장 오래된 동물원의 160년이 넘는 역사를 상징합니다. 관람객들은 이곳에서 사진을 찍은 뒤 산책을 시작하는 경우가 많습니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-002",
+    "name": "Khu Voi Châu Á",
+    "lat": 10.78825,
+    "lon": 106.70585,
+    "radius_m": 30,
+    "image_url": "/images/tcv-002.jpg",
+    "category": "thu_an_co",
+    "species_name": "Elephas maximus",
+    "translations": {
+      "vi": {
+        "name": "Khu Voi Châu Á",
+        "description": "Khu voi Châu Á chăm sóc các cá thể Elephas maximus, loài voi nhỏ hơn voi Châu Phi với tai tròn và vòi rất khéo. Voi dùng vòi để lấy thức ăn, uống nước và giao tiếp với nhau. Hãy quan sát từ hàng rào, không gọi lớn hay đưa thức ăn vào chuồng."
+      },
+      "en": {
+        "name": "Asian Elephant Zone",
+        "description": "This zone cares for Asian elephants (Elephas maximus), smaller than African elephants, with rounder ears and a highly skillful trunk. They use the trunk to feed, drink, and communicate. Please watch from the fence and never shout or offer food."
+      },
+      "zh": {
+        "name": "亚洲象区",
+        "description": "本区饲养亚洲象（Elephas maximus），体型小于非洲象，耳朵较圆，象鼻非常灵活。它们用鼻子取食、饮水并互相交流。请在围栏外观看，不要大声叫喊或投喂。"
+      },
+      "ja": {
+        "name": "アジアゾウ園",
+        "description": "ここではアジアゾウ（Elephas maximus）を飼育しています。アフリカゾウより小さく、耳は丸みがあり、鼻がとても器用です。鼻で食事・飲水・コミュニケーションを行います。柵の外から静かに見学し、大声や餌やりはしないでください。"
+      },
+      "ko": {
+        "name": "아시아코끼리 구역",
+        "description": "이곳에서는 아시아코끼리(Elephas maximus)를 돌봅니다. 아프리카코끼리보다 작고 귀가 둥글며 코가 매우 능숙합니다. 코로 먹이를 집고 물을 마시며 소통합니다. 울타리 밖에서 관람하고, 큰 소리나 먹이 주기는 삼가 주세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-003",
+    "name": "Khu Hổ Trắng Bengal",
+    "lat": 10.78885,
+    "lon": 106.70655,
+    "radius_m": 30,
+    "image_url": "/images/tcv-003.jpg",
+    "category": "thu_an_thit",
+    "species_name": "Panthera tigris tigris",
+    "translations": {
+      "vi": {
+        "name": "Khu Hổ Trắng Bengal",
+        "description": "Hổ trắng Bengal là biến thể quý của hổ Bengal, với bộ lông trắng, sọc đen và mắt xanh. Chúng là thú ăn thịt đỉnh cao, di chuyển êm và quan sát rất tinh. Thảo Cầm Viên chăm sóc loài này trong không gian rộng, tách biệt với du khách."
+      },
+      "en": {
+        "name": "Bengal White Tiger Zone",
+        "description": "The white Bengal tiger is a rare colour variant of Panthera tigris, with white fur, black stripes, and blue eyes. These apex predators move quietly and watch their surroundings closely. The zoo houses them in a spacious enclosure, safely separated from visitors."
+      },
+      "zh": {
+        "name": "孟加拉白虎区",
+        "description": "孟加拉白虎是孟加拉虎的稀有色型，白色皮毛配黑色条纹，眼睛呈蓝色。它们是顶级掠食者，行动安静、观察敏锐。园内在宽敞且与游客隔离的空间中饲养。"
+      },
+      "ja": {
+        "name": "ベンガルホワイトタイガー園",
+        "description": "ホワイトタイガーはベンガルトラの珍しい色彩変異で、白い毛並みに黒い縞、青い目が特徴です。頂点捕食者として静かに歩き、周囲を鋭く観察します。園では広々とした展示場で、来園者と分けて飼育しています。"
+      },
+      "ko": {
+        "name": "벵골 흰호랑이 구역",
+        "description": "흰호랑이는 벵골호랑이의 드문 색 변이로, 흰 털과 검은 줄무늬, 푸른 눈을 가집니다. 최상위 포식자로 조용히 움직이며 주변을 예리하게 살핍니다. 동물원은 관람객과 분리된 넓은 공간에서 사육합니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-004",
+    "name": "Bảo Tàng Lịch Sử Việt Nam",
+    "lat": 10.78782,
+    "lon": 106.70475,
+    "radius_m": 40,
+    "image_url": "/images/tcv-004.jpg",
+    "category": "tien_ich",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Bảo Tàng Lịch Sử Việt Nam",
+        "description": "Bảo tàng nằm ngay trong khuôn viên Thảo Cầm Viên, lưu giữ hàng chục nghìn hiện vật từ tiền sử đến thế kỷ 20. Bạn có thể xem cổ vật Óc Eo, đồ gốm Chăm Pa và nhiều bảo vật quốc gia. Kết hợp thăm bảo tàng với dạo vườn tạo nên một buổi tham quan văn hóa trọn vẹn."
+      },
+      "en": {
+        "name": "Vietnam History Museum",
+        "description": "The museum sits inside the zoo grounds and holds tens of thousands of artifacts from prehistory to the 20th century. Highlights include Óc Eo relics, Cham pottery, and national treasures. Combining the museum with a garden walk makes a full cultural visit."
+      },
+      "zh": {
+        "name": "越南历史博物馆",
+        "description": "博物馆就在动植物园区内，收藏从史前到20世纪的数万件文物。可以看到俄厄文化遗物、占婆陶器和多件国宝。把参观博物馆与园内散步结合起来，就是一次完整的文化之旅。"
+      },
+      "ja": {
+        "name": "ベトナム歴史博物館",
+        "description": "博物館は園内にあり、先史時代から20世紀までの数万点の資料を所蔵します。オケオ文化の遺物やチャンパの陶器、国宝級の品も見られます。園内散歩と組み合わせると、文化を味わう一日になります。"
+      },
+      "ko": {
+        "name": "베트남 역사 박물관",
+        "description": "박물관은 동식물원 안에 있으며, 선사시대부터 20세기까지 수만 점의 유물을 소장합니다. 옥에오 유물, 참파 도자기, 국보급 자료가 있습니다. 정원 산책과 함께하면 문화 관람이 더욱 풍성해집니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-005",
+    "name": "Vườn Thực Vật Cổ Thụ",
+    "lat": 10.78915,
+    "lon": 106.70505,
+    "radius_m": 40,
+    "image_url": "/images/tcv-005.jpg",
+    "category": "tien_ich",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Vườn Thực Vật Cổ Thụ",
+        "description": "Vườn thực vật là lá phổi xanh giữa trung tâm Thành phố Hồ Chí Minh, với hàng trăm cây cổ thụ và hơn một nghìn loài nhiệt đới. Bóng mát dày giúp không khí dịu hơn so với phố bên ngoài. Đi chậm dưới tán cây, bạn sẽ thấy chim và sóc nhỏ đang sống cùng khu vườn."
+      },
+      "en": {
+        "name": "Ancient Botanical Garden",
+        "description": "The botanical garden is a green lung in central Ho Chi Minh City, with hundreds of old trees and more than a thousand tropical species. Deep shade makes the air cooler than the streets outside. Walk slowly under the canopy and you may spot small birds and squirrels."
+      },
+      "zh": {
+        "name": "古树植物园",
+        "description": "植物园是胡志明市中心的绿肺，拥有数百棵古树和一千多种热带植物。浓荫让空气比园外街道凉爽。慢慢走在树冠下，常能看见小鸟和松鼠。"
+      },
+      "ja": {
+        "name": "古木の植物園",
+        "description": "植物園はホーチミン市中心部の緑の肺で、数百本の古木と千を超える熱帯植物があります。深い木陰は外の通りより涼しく感じられます。ゆっくり歩くと、小鳥やリスにも出会えます。"
+      },
+      "ko": {
+        "name": "고목 식물원",
+        "description": "식물원은 호치민 시내 한가운데의 푸른 허파로, 수백 그루의 고목과 천여 종의 열대 식물이 있습니다. 깊은 그늘 덕분에 바깥 거리보다 시원합니다. 천천히 걷다 보면 작은 새와 다람쥐도 볼 수 있습니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-006",
+    "name": "Khu Khỉ Đuôi Dài",
+    "lat": 10.78840,
+    "lon": 106.70490,
+    "radius_m": 25,
+    "image_url": "/images/tcv-006.jpg",
+    "category": "linh_truong",
+    "species_name": "Macaca fascicularis",
+    "translations": {
+      "vi": {
+        "name": "Khu Khỉ Đuôi Dài",
+        "description": "Khỉ đuôi dài (Macaca fascicularis) sống thành đàn, leo trèo giỏi và rất tò mò với du khách. Chúng dùng tay khéo để tìm thức ăn và chải lông cho nhau, dấu hiệu gắn kết xã hội. Quan sát im lặng sẽ thấy thứ tự đàn và cách khỉ con học từ khỉ lớn."
+      },
+      "en": {
+        "name": "Long-tailed Macaque Zone",
+        "description": "Long-tailed macaques (Macaca fascicularis) live in troops, climb well, and are curious about visitors. They use nimble hands to forage and to groom one another, a sign of social bonds. Watch quietly and you will notice troop order and how youngsters learn from adults."
+      },
+      "zh": {
+        "name": "长尾猕猴区",
+        "description": "长尾猕猴（Macaca fascicularis）群居，擅长攀爬，对游客很好奇。它们用灵活的双手觅食，并互相理毛，这是社会联系的表现。安静观察就能看到群体秩序，以及幼猴如何向成体学习。"
+      },
+      "ja": {
+        "name": "カニクイザル園",
+        "description": "カニクイザル（Macaca fascicularis）は群れで暮らし、木登りが上手で来園者にも興味津々です。器用な手で食べ物を探し、毛づくろいをして絆を深めます。静かに見ると、群れの序列や子どもが成体から学ぶ様子がわかります。"
+      },
+      "ko": {
+        "name": "긴꼬리마카크 구역",
+        "description": "긴꼬리마카크(Macaca fascicularis)는 무리 생활을 하며 나무를 잘 타고 관람객에게도 호기심이 많습니다. 손으로 먹이를 찾고 서로 털을 골라 주며 유대를 쌓습니다. 조용히 보면 무리의 질서와 새끼가 어른을 따라 배우는 모습을 볼 수 있습니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-007",
+    "name": "Khu Vượn",
+    "lat": 10.78895,
+    "lon": 106.70485,
+    "radius_m": 25,
+    "image_url": "/images/tcv-007.jpg",
+    "category": "linh_truong",
+    "species_name": "Nomascus leucogenys",
+    "translations": {
+      "vi": {
+        "name": "Khu Vượn",
+        "description": "Vượn má trắng (Nomascus leucogenys) là linh trưởng bản địa Đông Dương, cánh tay dài và tiếng hót vang vào buổi sáng. Chúng sống trên cây, di chuyển bằng cách đung đưa từ cành này sang cành khác. Hãy lắng nghe tiếng gọi — đó là cách vượn giữ lãnh thổ và gắn kết cặp đôi."
+      },
+      "en": {
+        "name": "Gibbon Zone",
+        "description": "White-cheeked gibbons (Nomascus leucogenys) are native to Indochina, with long arms and loud morning songs. They live in the trees and travel by swinging from branch to branch. Listen for their calls — gibbons use song to hold territory and strengthen pair bonds."
+      },
+      "zh": {
+        "name": "长臂猿区",
+        "description": "白颊长臂猿（Nomascus leucogenys）原产中南半岛，手臂修长，清晨歌声嘹亮。它们生活在树上，靠荡臂在枝条间移动。请留意叫声——长臂猿用歌声宣示领域并巩固配偶关系。"
+      },
+      "ja": {
+        "name": "テナガザル園",
+        "description": "ホオジロテナガザル（Nomascus leucogenys）はインドシナ原産で、長い腕と朝の大きな歌声が特徴です。樹上生活をし、枝から枝へぶら下がって移動します。鳴き声に耳を澄めてください。縄張りとペアの絆を保つ歌です。"
+      },
+      "ko": {
+        "name": "긴팔원숭이 구역",
+        "description": "흰뺨긴팔원숭이(Nomascus leucogenys)는 인도차이나 원산으로 팔이 길고 아침 노랫소리가 큽니다. 나무 위에서 살며 가지와 가지 사이를 매달려 이동합니다. 울음소리에 귀를 기울여 보세요. 영역을 지키고 짝 유대를 다지는 노래입니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-008",
+    "name": "Khu Cá Sấu Siamese",
+    "lat": 10.78850,
+    "lon": 106.70690,
+    "radius_m": 30,
+    "image_url": "/images/tcv-008.jpg",
+    "category": "bo_sat_luong_cu",
+    "species_name": "Crocodylus siamensis",
+    "translations": {
+      "vi": {
+        "name": "Khu Cá Sấu Siamese",
+        "description": "Cá sấu Siamese (Crocodylus siamensis) từng phổ biến ở sông hồ Đông Nam Á nhưng nay rất hiếm ngoài tự nhiên. Chúng nằm bất động hàng giờ, chỉ hở mắt và mũi trên mặt nước. Đừng đứng sát mép hồ và tuyệt đối không ném đồ ăn xuống nước."
+      },
+      "en": {
+        "name": "Siamese Crocodile Zone",
+        "description": "The Siamese crocodile (Crocodylus siamensis) was once common in Southeast Asian rivers and lakes, but is now rare in the wild. They can lie still for hours, with only eyes and nostrils above the water. Stay back from the pool edge and never throw food in."
+      },
+      "zh": {
+        "name": "暹罗鳄区",
+        "description": "暹罗鳄（Crocodylus siamensis）曾广泛分布于东南亚河湖，如今野外已十分稀少。它们可以数小时不动，只把眼睛和鼻孔露出水面。请远离池边，千万不要投喂。"
+      },
+      "ja": {
+        "name": "シャムワニ園",
+        "description": "シャムワニ（Crocodylus siamensis）は東南アジアの河川に普通にいましたが、野生では非常に珍しくなりました。何時間も動かず、目と鼻だけを水面に出します。池の縁には近づかず、餌を投げないでください。"
+      },
+      "ko": {
+        "name": "샴악어 구역",
+        "description": "샴악어(Crocodylus siamensis)는 한때 동남아시아 강과 호수에 흔했으나 야생에서는 매우 드뭅니다. 몇 시간이고 움직이지 않고 눈과 콧구멍만 수면에 내놓습니다. 연못 가장자리에 가까이 가지 말고 먹이를 던지지 마세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-009",
+    "name": "Hồ Rùa",
+    "lat": 10.78790,
+    "lon": 106.70620,
+    "radius_m": 25,
+    "image_url": "/images/tcv-009.jpg",
+    "category": "bo_sat_luong_cu",
+    "species_name": "Trionychidae / Geoemydidae",
+    "translations": {
+      "vi": {
+        "name": "Hồ Rùa",
+        "description": "Hồ rùa nuôi một số loài rùa nước ngọt bản địa, thường nằm phơi nắng trên đá rồi lặn xuống đáy. Rùa giúp gợi nhớ hệ sinh thái sông Sài Gòn và Đồng bằng sông Cửu Long. Quan sát mai, cổ và cách chúng thở khi ngẩng đầu khỏi mặt nước."
+      },
+      "en": {
+        "name": "Turtle Pond",
+        "description": "The pond holds native freshwater turtles that bask on rocks and then slip back under water. They recall the river ecosystems of Saigon and the Mekong Delta. Watch their shells, necks, and how they breathe when they lift their heads."
+      },
+      "zh": {
+        "name": "龟池",
+        "description": "龟池饲养几种本地淡水龟，它们常在石头上晒太阳，再潜入水中。这些龟让人想起西贡河与湄公河三角洲的水系生态。请观察龟甲、颈部，以及它们抬头出水呼吸的样子。"
+      },
+      "ja": {
+        "name": "カメ池",
+        "description": "池では在来の淡水ガメを飼育しています。岩の上で日向ぼっこをしたあと、水中へ戻ります。サイゴン川やメコンデルタの水辺を思い起こさせる展示です。甲羅や首、水面に顔を出して呼吸する様子を見てください。"
+      },
+      "ko": {
+        "name": "거북 연못",
+        "description": "연못에는 지역 민물거북이 살며, 바위 위에서 햇볕을 쬐다가 다시 물속으로 들어갑니다. 사이공강과 메콩 삼각주의 물 생태계를 떠올리게 합니다. 등껍질과 목, 고개를 들어 숨 쉬는 모습을 관찰해 보세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-010",
+    "name": "Nhà Chim",
+    "lat": 10.78940,
+    "lon": 106.70560,
+    "radius_m": 30,
+    "image_url": "/images/tcv-010.jpg",
+    "category": "chim",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Nhà Chim",
+        "description": "Nhà chim lớn nhốt nhiều loài bản địa và nhiệt đới trong không gian cao, có cây để đậu. Bạn sẽ nghe tiếng hót khác nhau tùy giờ trong ngày. Đi nhẹ, tránh chạm lưới, để chim không bị giật mình."
+      },
+      "en": {
+        "name": "Aviary",
+        "description": "The large aviary holds many native and tropical birds in a tall space with perching trees. Calls change through the day. Walk softly and do not touch the mesh, so the birds stay calm."
+      },
+      "zh": {
+        "name": "鸟舍",
+        "description": "大型鸟舍在高空间中饲养多种本地与热带鸟类，并设有栖木。不同时段能听到不同的鸣声。请轻步行走，不要触碰网罩，以免惊扰鸟类。"
+      },
+      "ja": {
+        "name": "鳥舎",
+        "description": "大きな鳥舎では、高い空間と止まり木のある環境で在来種や熱帯の鳥を飼育しています。時間帯によって鳴き声が変わります。静かに歩き、網には触れないでください。"
+      },
+      "ko": {
+        "name": "조류장",
+        "description": "큰 조류장에는 높은 공간과 횃대가 있어 여러 토종·열대 새가 삽니다. 시간대마다 울음소리가 달라집니다. 조용히 걷고 그물을 만지지 말아 주세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-011",
+    "name": "Khu Hồng Hạc",
+    "lat": 10.78900,
+    "lon": 106.70620,
+    "radius_m": 25,
+    "image_url": "/images/tcv-011.jpg",
+    "category": "chim",
+    "species_name": "Phoenicopterus roseus",
+    "translations": {
+      "vi": {
+        "name": "Khu Hồng Hạc",
+        "description": "Hồng hạc (Phoenicopterus) đứng một chân trên mặt nước nông, lọc thức ăn bằng mỏ cong đặc biệt. Màu hồng đến từ sắc tố trong tôm và tảo chúng ăn. Khi cả đàn cùng rúc rích, bạn đang thấy hành vi xã hội điển hình của loài."
+      },
+      "en": {
+        "name": "Flamingo Zone",
+        "description": "Flamingos (Phoenicopterus) often stand on one leg in shallow water and filter food with a distinctive bent bill. Their pink colour comes from pigments in the shrimp and algae they eat. When the flock chatters together, you are seeing typical social behaviour."
+      },
+      "zh": {
+        "name": "火烈鸟区",
+        "description": "火烈鸟（Phoenicopterus）常在浅水中单脚站立，用弯曲的喙滤食。粉红色来自所食虾类与藻类中的色素。当整群一起鸣叫时，那就是它们典型的社会行为。"
+      },
+      "ja": {
+        "name": "フラミンゴ園",
+        "description": "フラミンゴ（Phoenicopterus）は浅瀬で片足立ちし、曲がったくちばしで餌を濾します。ピンク色は食べるエビや藻の色素によるものです。群れがいっせいに鳴く様子は、代表的な社会行動です。"
+      },
+      "ko": {
+        "name": "홍학 구역",
+        "description": "홍학(Phoenicopterus)은 얕은 물에서 한 발로 서서 굽은 부리로 먹이를 걸러 먹습니다. 분홍빛은 새우와 조류에 든 색소에서 나옵니다. 무리가 함께 울면 전형적인 사회 행동을 보는 것입니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-012",
+    "name": "Vườn Công",
+    "lat": 10.78870,
+    "lon": 106.70520,
+    "radius_m": 25,
+    "image_url": "/images/tcv-012.jpg",
+    "category": "chim",
+    "species_name": "Pavo cristatus",
+    "translations": {
+      "vi": {
+        "name": "Vườn Công",
+        "description": "Công Ấn Độ (Pavo cristatus) nổi bật với bộ lông đuôi xòe thành quạt xanh-vàng khi khoe mẽ. Tiếng kêu vang giúp chúng gọi đồng loại trong vườn cây. Nếu gặp công đang xòe đuôi, hãy đứng xa và không dùng flash."
+      },
+      "en": {
+        "name": "Peacock Garden",
+        "description": "Indian peafowl (Pavo cristatus) are famous for the male’s green-and-gold tail fan during display. Their loud calls carry through the trees to find other birds. If a peacock fans its tail, keep your distance and skip the camera flash."
+      },
+      "zh": {
+        "name": "孔雀园",
+        "description": "印度孔雀（Pavo cristatus）的雄鸟开屏时，蓝绿色尾羽如扇。响亮的叫声能在林间呼唤同伴。若遇见开屏，请保持距离，不要使用闪光灯。"
+      },
+      "ja": {
+        "name": "クジャク園",
+        "description": "インドクジャク（Pavo cristatus）の雄は求愛の際、緑と金の尾羽を扇のように広げます。大きな鳴き声で林の中の仲間に呼びかけます。羽を広げているときは距離をとり、フラッシュは使わないでください。"
+      },
+      "ko": {
+        "name": "공작 정원",
+        "description": "인도공작(Pavo cristatus) 수컷은 구애할 때 청록·금색 꼬리를 부채처럼 펼칩니다. 큰 울음으로 숲속 동료를 부릅니다. 꼬리를 펼친 모습을 보면 거리를 유지하고 플래시는 켜지 마세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-013",
+    "name": "Khu Hươu Sao",
+    "lat": 10.78950,
+    "lon": 106.70470,
+    "radius_m": 35,
+    "image_url": "/images/tcv-013.jpg",
+    "category": "thu_an_co",
+    "species_name": "Axis axis",
+    "translations": {
+      "vi": {
+        "name": "Khu Hươu Sao",
+        "description": "Hươu sao (Axis axis) có bộ lông vàng nâu phủ đốm trắng, sống thành nhóm trên bãi cỏ. Con đực mang gạc phân nhánh, rụng và mọc lại theo mùa. Cho thú ăn làm chúng phụ thuộc và dễ gây xô đẩy — hãy chỉ ngắm từ lối đi."
+      },
+      "en": {
+        "name": "Spotted Deer Zone",
+        "description": "Spotted deer (Axis axis) have golden-brown coats with white spots and graze in groups on open lawns. Males grow branched antlers that are shed and regrown each season. Feeding them creates dependence and shoving — please watch from the path."
+      },
+      "zh": {
+        "name": "花鹿区",
+        "description": "花鹿（Axis axis）毛色棕黄带白斑，常成群在草地上觅食。雄鹿长有分叉鹿角，会按季节脱落再长。投喂会让它们依赖人类并互相推挤——请在步道外观看。"
+      },
+      "ja": {
+        "name": "アクシスジカ園",
+        "description": "アクシスジカ（Axis axis）は黄褐色に白い斑点があり、草地で群れます。雄は枝分かれした角を持ち、季節ごとに落ちて再生します。餌やりは依存や押し合いの原因になります。通路から見学してください。"
+      },
+      "ko": {
+        "name": "꽃사슴 구역",
+        "description": "꽃사슴(Axis axis)은 황갈색 몸에 흰 점이 있으며 잔디밭에서 무리 지어 풀을 뜯습니다. 수컷은 가지 친 뿔이 계절마다 떨어지고 다시 자랍니다. 먹이를 주면 의존과 밀침이 생깁니다. 산책로에서만 봐 주세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-014",
+    "name": "Khu Hà Mã",
+    "lat": 10.78810,
+    "lon": 106.70680,
+    "radius_m": 30,
+    "image_url": "/images/tcv-014.jpg",
+    "category": "thu_an_co",
+    "species_name": "Hippopotamus amphibius",
+    "translations": {
+      "vi": {
+        "name": "Khu Hà Mã",
+        "description": "Hà mã (Hippopotamus amphibius) phần lớn thời gian ngâm mình dưới nước để làm mát làn da dày. Chúng là thú ăn cỏ, nhưng tính khí thất thường và rất mạnh. Quan sát từ lan can, chú ý tai và mắt khi chúng vừa nổi lên mặt hồ."
+      },
+      "en": {
+        "name": "Hippo Zone",
+        "description": "Hippos (Hippopotamus amphibius) spend much of the day in water to keep their thick skin cool. They are grazers, yet they are powerful and can be unpredictable. Watch from the railing and look for ears and eyes when they surface."
+      },
+      "zh": {
+        "name": "河马区",
+        "description": "河马（Hippopotamus amphibius）大部分时间浸在水里，为厚皮肤降温。它们以草为食，但力气极大、性情难测。请在栏杆外观看，留意它们露出水面时的耳朵和眼睛。"
+      },
+      "ja": {
+        "name": "カバ園",
+        "description": "カバ（Hippopotamus amphibius）は厚い皮膚を冷やすため、日中の多くを水中で過ごします。草食ですが力が強く、気性も読めません。柵の外から、水面に耳と目が出る瞬間を見てください。"
+      },
+      "ko": {
+        "name": "하마 구역",
+        "description": "하마(Hippopotamus amphibius)는 두꺼운 피부를 식히려고 하루 대부분을 물속에 있습니다. 풀을 먹지만 힘이 세고 예측하기 어렵습니다. 난간 밖에서, 수면 위로 귀와 눈이 올라오는 모습을 보세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-015",
+    "name": "Khu Sư Tử",
+    "lat": 10.78920,
+    "lon": 106.70670,
+    "radius_m": 30,
+    "image_url": "/images/tcv-015.jpg",
+    "category": "thu_an_thit",
+    "species_name": "Panthera leo",
+    "translations": {
+      "vi": {
+        "name": "Khu Sư Tử",
+        "description": "Sư tử (Panthera leo) sống theo bầy, con đực có bờm dày và tiếng gầm rất xa. Ban ngày chúng thường nằm nghỉ, hoạt động nhiều hơn lúc sáng sớm và chiều mát. Chuồng được thiết kế khoảng cách an toàn — đừng gõ kính hay gọi to."
+      },
+      "en": {
+        "name": "Lion Zone",
+        "description": "Lions (Panthera leo) live in prides; males have thick manes and a roar that carries far. They rest much of the day and are more active at dawn and late afternoon. The enclosure is built for a safe distance — do not tap glass or shout."
+      },
+      "zh": {
+        "name": "狮子区",
+        "description": "狮子（Panthera leo）过群体生活，雄狮有浓密鬃毛，吼声传得很远。白天多在休息，清晨和傍晚更活跃。展区已保持安全距离——请勿敲玻璃或大声呼叫。"
+      },
+      "ja": {
+        "name": "ライオン園",
+        "description": "ライオン（Panthera leo）はプライドと呼ばれる群れで暮らし、雄は厚いたてがみと遠くまで届く咆哮を持ちます。日中は休息が多く、明け方と夕方に活発になります。安全な距離が確保されています。ガラスを叩いたり大声を出したりしないでください。"
+      },
+      "ko": {
+        "name": "사자 구역",
+        "description": "사자(Panthera leo)는 무리 생활을 하며, 수컷은 굵은 갈기와 멀리 퍼지는 포효를 가집니다. 낮에는 주로 쉬고 새벽과 늦은 오후에 더 활발합니다. 안전 거리가 확보되어 있습니다. 유리를 두드리거나 소리 지르지 마세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-016",
+    "name": "Khu Gấu Chó",
+    "lat": 10.78860,
+    "lon": 106.70710,
+    "radius_m": 25,
+    "image_url": "/images/tcv-016.jpg",
+    "category": "thu_an_thit",
+    "species_name": "Helarctos malayanus",
+    "translations": {
+      "vi": {
+        "name": "Khu Gấu Chó",
+        "description": "Gấu chó (Helarctos malayanus) là gấu nhỏ nhất thế giới, ngực có vòng lông hình móng ngựa màu vàng. Chúng leo cây giỏi, thích mật ong, quả và côn trùng. Loài này bị đe dọa ngoài tự nhiên nên việc chăm sóc tại vườn thú gắn với giáo dục bảo tồn."
+      },
+      "en": {
+        "name": "Sun Bear Zone",
+        "description": "The sun bear (Helarctos malayanus) is the world’s smallest bear, with a golden horseshoe mark on the chest. They climb well and eat honey, fruit, and insects. The species is threatened in the wild, so this exhibit also supports conservation education."
+      },
+      "zh": {
+        "name": "马来熊区",
+        "description": "马来熊（Helarctos malayanus）是体型最小的熊，胸部有金色马蹄形斑纹。它们擅长爬树，爱吃蜂蜜、果实和昆虫。该物种在野外受威胁，此展区也承担保护教育的作用。"
+      },
+      "ja": {
+        "name": "マレーグマ園",
+        "description": "マレーグマ（Helarctos malayanus）は世界最小のクマで、胸に金色の蹄形の模様があります。木登りが得意で、蜂蜜・果実・昆虫を食べます。野生では脅威にさらされており、この展示は保全教育にもつながります。"
+      },
+      "ko": {
+        "name": "말레이곰 구역",
+        "description": "말레이곰(Helarctos malayanus)은 세계에서 가장 작은 곰으로, 가슴에 금색 말굽 무늬가 있습니다. 나무를 잘 타며 꿀, 과일, 곤충을 먹습니다. 야생에서 위협받는 종이라 이곳 전시는 보전 교육의 의미도 있습니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-017",
+    "name": "Khu Tê Giác",
+    "lat": 10.78970,
+    "lon": 106.70590,
+    "radius_m": 30,
+    "image_url": "/images/tcv-017.jpg",
+    "category": "thu_an_co",
+    "species_name": "Rhinoceros unicornis",
+    "translations": {
+      "vi": {
+        "name": "Khu Tê Giác",
+        "description": "Tê giác một sừng Ấn Độ (Rhinoceros unicornis) có da dày xếp nếp như áo giáp. Chúng ăn cỏ và lá, thích đằm mình trong bùn để hạ nhiệt và tránh côn trùng. Hãy tôn trọng khoảng cách — tê giác to, di chuyển nhanh hơn vẻ ngoài chậm chạp."
+      },
+      "en": {
+        "name": "Rhino Zone",
+        "description": "The greater one-horned rhinoceros (Rhinoceros unicornis) has thick, folded skin like armour. They graze on grass and leaves and wallow in mud to cool down and keep insects off. Keep your distance — rhinos are large and quicker than they look."
+      },
+      "zh": {
+        "name": "犀牛区",
+        "description": "印度独角犀（Rhinoceros unicornis）的皮肤厚实、褶皱如铠甲。它们吃草和树叶，喜欢在泥中打滚以降温并驱虫。请保持距离——犀牛体型庞大，行动比看上去更快。"
+      },
+      "ja": {
+        "name": "サイ園",
+        "description": "インドサイ（Rhinoceros unicornis）は鎧のような厚い襞のある皮膚を持ちます。草や葉を食べ、体温を下げ虫を避けるために泥浴びをします。距離を保ってください。見た目以上に素早く動けます。"
+      },
+      "ko": {
+        "name": "코뿔소 구역",
+        "description": "인도코뿔소(Rhinoceros unicornis)는 갑옷처럼 두껍고 주름진 피부를 가집니다. 풀과 잎을 먹고, 열을 식히고 벌레를 피하려고 진흙에서 뒹굽니다. 거리를 유지하세요. 덩치에 비해 생각보다 빠릅니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-018",
+    "name": "Hồ Sen",
+    "lat": 10.78800,
+    "lon": 106.70550,
+    "radius_m": 35,
+    "image_url": "/images/tcv-018.jpg",
+    "category": "tien_ich",
+    "species_name": "Nelumbo nucifera",
+    "translations": {
+      "vi": {
+        "name": "Hồ Sen",
+        "description": "Hồ sen là điểm nghỉ mát giữa các khu chuồng, mặt nước phủ lá và hoa Nelumbo nucifera theo mùa. Chim nước thường ghé kiếm ăn vào sáng sớm. Ngồi một lát trên ghế đá, bạn sẽ thấy nhịp chậm của vườn thú già hơn 160 năm."
+      },
+      "en": {
+        "name": "Lotus Lake",
+        "description": "The lotus lake is a cool pause between animal zones, with seasonal Nelumbo nucifera leaves and flowers. Waterbirds often feed here in the early morning. Sit on a stone bench and you will feel the slower rhythm of a garden more than 160 years old."
+      },
+      "zh": {
+        "name": "荷花池",
+        "description": "荷花池是各展区之间的清凉歇脚处，季节里可见莲（Nelumbo nucifera）的叶与花。清晨常有水鸟来觅食。在石凳上坐一会儿，就能感受到这座160多年园林的慢节奏。"
+      },
+      "ja": {
+        "name": "ハス池",
+        "description": "ハス池は展示エリアの間の涼しい休憩地点で、季節ごとにハス（Nelumbo nucifera）の葉と花が見られます。早朝は水鳥が餌を探しに来ます。石のベンチに座ると、160年以上の庭園のゆっくりした時間が感じられます。"
+      },
+      "ko": {
+        "name": "연꽃 호수",
+        "description": "연꽃 호수는 사육장 사이의 시원한 쉼터로, 계절에 따라 연(Nelumbo nucifera) 잎과 꽃이 핍니다. 이른 아침에는 물새가 먹이를 찾으러 옵니다. 돌벤치에 앉으면 160년이 넘는 정원의 느린 리듬이 느껴집니다."
+      }
+    }
+  },
+  {
+    "id": "tcv-019",
+    "name": "Quầy Dịch Vụ & Nghỉ Chân",
+    "lat": 10.78770,
+    "lon": 106.70570,
+    "radius_m": 20,
+    "image_url": "/images/tcv-019.jpg",
+    "category": "tien_ich",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Quầy Dịch Vụ & Nghỉ Chân",
+        "description": "Khu tiện ích có chỗ ngồi mát, nước uống và hướng dẫn lối đi các chuồng lân cận. Hãy bổ sung nước, kiểm tra bản đồ trước khi vào khu thú ăn thịt. Giữ rác đúng nơi quy định để bảo vệ ao hồ và động vật trong vườn."
+      },
+      "en": {
+        "name": "Visitor Services & Rest Stop",
+        "description": "This amenity area offers shade, drinking water, and directions to nearby exhibits. Refill water and check the map before entering the carnivore zone. Please bin your rubbish to protect the lakes and animals."
+      },
+      "zh": {
+        "name": "服务休息处",
+        "description": "这里有阴凉座位、饮用水，以及附近展区的指路信息。进入食肉动物区前请补充水分并查看地图。请把垃圾投入指定处，保护园内湖水和动物。"
+      },
+      "ja": {
+        "name": "サービス・休憩所",
+        "description": "日陰の座席、飲料水、近隣展示への案内がある便益施設です。肉食動物エリアに入る前に水分をとり、地図を確認してください。湖と動物を守るため、ごみは所定の場所へ。"
+      },
+      "ko": {
+        "name": "안내·휴식 공간",
+        "description": "그늘 좌석, 식수, 근처 전시 안내가 있는 편의 공간입니다. 육식 동물 구역에 들어가기 전에 물을 보충하고 지도를 확인하세요. 호수와 동물을 위해 쓰레기는 지정된 곳에 버려 주세요."
+      }
+    }
+  },
+  {
+    "id": "tcv-020",
+    "name": "Khu Vui Chơi Trẻ Em",
+    "lat": 10.78740,
+    "lon": 106.70490,
+    "radius_m": 20,
+    "image_url": "/images/tcv-020.jpg",
+    "category": "tien_ich",
+    "species_name": null,
+    "translations": {
+      "vi": {
+        "name": "Khu Vui Chơi Trẻ Em",
+        "description": "Khu vui chơi nằm gần cổng, dành cho gia đình có trẻ nhỏ nghỉ giữa buổi tham quan. Sàn và đồ chơi được bố trí trong bóng cây, cách chuồng thú một khoảng an toàn. Người lớn cần trông trẻ, không để các em chạy ra đường nội bộ của vườn."
+      },
+      "en": {
+        "name": "Children’s Play Area",
+        "description": "The play area near the gate is for families with young children to rest during a visit. Equipment sits in the shade, a safe distance from animal enclosures. Adults should supervise children and keep them off internal service roads."
+      },
+      "zh": {
+        "name": "儿童游乐区",
+        "description": "游乐区靠近正门，方便带小孩的家庭在参观中途休息。设施在树荫下，与动物展区保持安全距离。成人请看护孩子，不要让他们跑到园内车道上。"
+      },
+      "ja": {
+        "name": "子ども遊び場",
+        "description": "正門近くの遊び場は、小さな子ども連れが見学の合間に休む場所です。遊具は木陰にあり、動物舎から安全な距離を取っています。大人は子どもから目を離さず、園内通路へ走らせないでください。"
+      },
+      "ko": {
+        "name": "어린이 놀이 공간",
+        "description": "정문 근처 놀이터는 어린이 동반 가족이 관람 중간에 쉴 수 있는 곳입니다. 그늘 아래 놀이기구가 있으며 사육장과 안전 거리가 있습니다. 어른이 아이를 살펴 주시고, 원내 도로로 뛰어가지 않게 해 주세요."
+      }
+    }
+  }
+]

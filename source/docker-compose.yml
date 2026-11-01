@@ -1,0 +1,133 @@
+# Chạy: docker compose up --build
+# Dừng giữ data: docker compose down
+# Xóa data: docker compose down -v
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: zoo-mongo
+    networks:
+      - zoo-network
+    volumes:
+      - mongo_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=${DB_NAME:-zoo}
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  auth-service:
+    build:
+      context: ./service-auth
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8001:8001"
+    networks:
+      - zoo-network
+    environment:
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
+      - MONGO_URI=mongodb://mongo:27017
+      - DB_NAME=${DB_NAME:-zoo}
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required - set it in .env}
+      - COUNTER_USERNAME=${COUNTER_USERNAME:-counter01}
+      - COUNTER_PASSWORD=${COUNTER_PASSWORD:?COUNTER_PASSWORD is required - set it in .env}
+      - PUBLIC_BASE_URL=${PUBLIC_BASE_URL:-http://localhost}
+      - TICKET_TTL=${TICKET_TTL:-end_of_day}
+      - ACTIVATE_RATE_LIMIT=${ACTIVATE_RATE_LIMIT:-20}
+      - ACTIVATE_IP_RATE_LIMIT=${ACTIVATE_IP_RATE_LIMIT:-300}
+      - ACTIVATE_RATE_WINDOW_SEC=${ACTIVATE_RATE_WINDOW_SEC:-60}
+    depends_on:
+      mongo:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  content-service:
+    build:
+      context: ./service-content
+      dockerfile: Dockerfile
+    container_name: content-service
+    ports:
+      - "8002:8002"
+    networks:
+      - zoo-network
+    environment:
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
+      - MONGO_URI=mongodb://mongo:27017
+      - DB_NAME=${DB_NAME:-zoo}
+      - AUDIO_SERVICE_URL=http://audio-service:8003
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
+      - N_ACTIVE_MINUTES=${N_ACTIVE_MINUTES:-10}
+      - PRESENCE_ENTER_TTL_MINUTES=${PRESENCE_ENTER_TTL_MINUTES:-120}
+      - EVENT_DEDUPE_SECONDS=${EVENT_DEDUPE_SECONDS:-30}
+      - EVENT_RATE_LIMIT=${EVENT_RATE_LIMIT:-30}
+      - EVENT_RATE_WINDOW_SEC=${EVENT_RATE_WINDOW_SEC:-60}
+      - GEO_TOLERANCE_M=${GEO_TOLERANCE_M:-20}
+      - EVENT_REQUIRE_GPS=${EVENT_REQUIRE_GPS:-false}
+      - SEED_POI_PATH=/app/seed/pois.json
+    depends_on:
+      mongo:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      audio-service:
+        condition: service_healthy
+    volumes:
+      - ./seed:/app/seed:ro
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  audio-service:
+    build:
+      context: ./service-audio
+      dockerfile: Dockerfile
+    container_name: audio-service
+    ports:
+      - "8003:8003"
+    networks:
+      - zoo-network
+    environment:
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
+      - MONGO_URI=mongodb://mongo:27017
+      - DB_NAME=${DB_NAME:-zoo}
+      - CONTENT_SERVICE_URL=http://content-service:8002
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
+      - AUDIO_DIR=/app/audio_files
+    depends_on:
+      mongo:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - audio_files:/app/audio_files
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  zoo-network:
+    driver: bridge
+
+volumes:
+  mongo_data:
+  audio_files:
