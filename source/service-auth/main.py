@@ -4,7 +4,10 @@ Auth Service — đăng nhập nhân viên nội bộ (counter / admin) và vé 
 Du khách KHÔNG có tài khoản: quét QR → kích hoạt mã vé → nhận ticket_token.
 
 Biến môi trường: JWT_SECRET, MONGO_URI, DB_NAME, ADMIN_USERNAME, ADMIN_PASSWORD,
-PUBLIC_BASE_URL, TICKET_TTL
+PUBLIC_BASE_URL, TICKET_TTL, INTERNAL_SERVICE_KEY
+
+Database riêng của Auth Service: collection `users`, `tickets`. Service khác KHÔNG đọc thẳng DB này,
+mà gọi các endpoint /internal/* (header X-Internal-Key).
 """
 
 from __future__ import annotations
@@ -18,7 +21,7 @@ import jwt
 import os
 import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field
@@ -51,6 +54,23 @@ COUNTER_SEED_USERNAME = os.getenv("COUNTER_USERNAME", "counter01")
 COUNTER_SEED_PASSWORD = os.getenv("COUNTER_PASSWORD", "counter123")
 TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
 STAFF_TOKEN_HOURS = int(os.getenv("STAFF_TOKEN_HOURS", "8"))
+
+_WEAK_INTERNAL_KEYS = {"internal-secret-change-me", "change-me-internal-key"}
+
+
+def _load_internal_key() -> str:
+    key = os.getenv("INTERNAL_SERVICE_KEY", "").strip()
+    if TESTING:
+        return key or "internal-secret-change-me"
+    if len(key) < 16 or key in _WEAK_INTERNAL_KEYS:
+        raise RuntimeError(
+            "INTERNAL_SERVICE_KEY chưa đặt hoặc quá yếu (cần >= 16 ký tự, không dùng giá trị mẫu). "
+            'Tạo bằng: python -c "import secrets; print(secrets.token_urlsafe(32))"'
+        )
+    return key
+
+
+INTERNAL_SERVICE_KEY = _load_internal_key()
 
 db_client: Optional[AsyncIOMotorClient] = None
 
@@ -192,6 +212,30 @@ class ActivateTicketRequest(BaseModel):
     )
 
 
+def require_internal(x_internal_key: Optional[str] = Header(default=None, alias="X-Internal-Key")):
+    if x_internal_key != INTERNAL_SERVICE_KEY:
+        raise HTTPException(status_code=401, detail="Internal key không hợp lệ")
+    return True
+
+
+class DemoTicket(BaseModel):
+    """Vé demo do Content Service (seed_demo.py) nạp vào DB của Auth Service."""
+
+    id: str
+    code: str
+    created_by: Optional[str] = None
+    created_at: datetime
+    expires_at: datetime
+    device_id: Optional[str] = None
+    activated_at: Optional[datetime] = None
+    token_version: int = 0
+    demo: bool = True
+
+
+class DemoTicketBulk(BaseModel):
+    tickets: list[DemoTicket]
+
+
 @app.get("/")
 def root():
     return {"service": "Auth Service", "status": "đang chạy", "version": "2.0.0"}
@@ -321,3 +365,50 @@ async def get_my_ticket(ctx: dict = Depends(require_valid_ticket)):
         "token_version": ticket.get("token_version", 0),
         "ticket": serialize_ticket(ticket),
     }
+
+# API nội bộ — chỉ service khác gọi (header X-Internal-Key).
+# Content / Audio không còn đọc thẳng collection `tickets`; họ hỏi Auth Service.
+
+@app.get("/internal/tickets/created-between")
+async def internal_tickets_created_between(
+    start: datetime = Query(...),
+    end: datetime = Query(...),
+    _: bool = Depends(require_internal),
+):
+    """Vé có start <= created_at < end -> [{id, created_at}] (Content dùng cho thống kê)."""
+    db = get_db()
+    docs = await db["tickets"].find({"created_at": {"$gte": start, "$lt": end}}).to_list(length=None)
+    return {"tickets": [{"id": d.get("id"), "created_at": to_iso(d.get("created_at"))} for d in docs]}
+
+
+@app.get("/internal/tickets/{ticket_id}")
+async def internal_get_ticket(ticket_id: str, _: bool = Depends(require_internal)):
+    """Tra vé theo id để service khác đối chiếu token_version."""
+    db = get_db()
+    doc = await db["tickets"].find_one({"id": ticket_id})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Vé không tồn tại")
+    return {
+        "id": doc["id"],
+        "token_version": int(doc.get("token_version", 0)),
+        "expires_at": to_iso(doc.get("expires_at")),
+        "created_at": to_iso(doc.get("created_at")),
+    }
+
+
+@app.post("/internal/tickets/demo", status_code=201)
+async def internal_insert_demo_tickets(body: DemoTicketBulk, _: bool = Depends(require_internal)):
+    """Nạp vé demo (seed_demo.py của Content Service). Mọi vé đều bị ép cờ demo=true."""
+    db = get_db()
+    docs = [{**t.model_dump(), "demo": True} for t in body.tickets]
+    if docs:
+        await db["tickets"].insert_many(docs)
+    return {"inserted": len(docs)}
+
+
+@app.delete("/internal/tickets/demo")
+async def internal_delete_demo_tickets(_: bool = Depends(require_internal)):
+    """Xóa vé demo (cờ demo=true). Vé thật không bị đụng tới."""
+    db = get_db()
+    res = await db["tickets"].delete_many({"demo": True})
+    return {"deleted": res.deleted_count}
