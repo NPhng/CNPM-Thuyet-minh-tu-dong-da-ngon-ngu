@@ -1,5 +1,6 @@
 """
 Content Service — POI MongoDB, bản dịch 5 ngôn ngữ, kích hoạt TTS nội bộ.
+Database riêng: collection `pois`, `events`. Vé lấy từ Auth Service qua HTTP nội bộ (auth_client.py).
 Đọc POI (danh sách, chi tiết, nearby) là công khai, không cần vé.
 CRUD chỉ admin.
 Giai đoạn 4: du khách gửi sự kiện listen/enter/exit (POST /events, cần ticket_token);
@@ -18,15 +19,16 @@ from datetime import datetime, timezone
 from datetime import date as date_type
 from typing import Literal, Optional
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Response
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, model_validator
 
 import stats
-from audio_client import delete_poi_audio, generate_poi_audio, warmup_all_audio
+from audio_client import INTERNAL_SERVICE_KEY, delete_poi_audio, generate_poi_audio, warmup_all_audio
+from auth_client import HttpTicketStore
 from event_service import EventIngestor, serialize_event
-from event_store import MemoryEventStore, MemoryTicketStore, MongoEventStore, MongoTicketStore
+from event_store import MemoryEventStore, MemoryTicketStore, MongoEventStore
 from events_core import EventError, load_settings, vn_date_of
 from jwt_auth import invalidate_ticket_cache, require_roles, require_valid_ticket, set_ticket_lookup
 from poi_store import (
@@ -61,6 +63,12 @@ def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def require_internal(x_internal_key: Optional[str] = Header(default=None, alias="X-Internal-Key")):
+    if x_internal_key != INTERNAL_SERVICE_KEY:
+        raise HTTPException(status_code=401, detail="Internal key không hợp lệ")
+    return True
+
+
 def _make_ingestor() -> EventIngestor:
     # lambda để luôn dùng now_utc hiện tại của module (test có thể thay bằng đồng hồ giả)
     return EventIngestor(event_store, clock=lambda: now_utc())
@@ -87,7 +95,7 @@ async def lifespan(app: FastAPI):
     await db["pois"].create_index("category")
     store = MongoPoiStore(db)
     event_store = MongoEventStore(db)
-    ticket_store = MongoTicketStore(db)
+    ticket_store = HttpTicketStore()  # vé thuộc database của Auth Service
     await event_store.ensure_indexes()
     set_ticket_lookup(lambda ticket_id: ticket_store.find(ticket_id))
     ingestor = _make_ingestor()
@@ -287,6 +295,16 @@ async def get_poi_audio_status(poi_id: str, _: dict = Depends(require_roles("adm
     if not poi:
         raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
     return {"poi_id": poi_id, "audio_status": poi.get("audio_status") or empty_audio_status()}
+
+
+@app.put("/internal/pois/{poi_id}/audio-status/{lang}")
+async def internal_set_audio_status(poi_id: str, lang: str, body: dict, _: bool = Depends(require_internal)):
+    """Audio Service báo trạng thái sinh audio (generating / ready / error) để admin xem trong POI."""
+    if lang not in LANGS:
+        raise HTTPException(status_code=400, detail=f"Ngôn ngữ không hỗ trợ. Chọn: {list(LANGS)}")
+    if not await get_store().set_audio_status(poi_id, lang, body):
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+    return {"poi_id": poi_id, "lang": lang}
 
 
 @app.post("/pois", status_code=201)

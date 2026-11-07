@@ -11,7 +11,8 @@ Chạy khi hệ thống đang chạy (script nằm trong image content-service):
   (chạy lại ngay trước buổi trình bày để số "đang hoạt động / đang ở trong điểm" còn tươi).
   Vé và sự kiện thật (không có cờ demo) không bị đụng tới.
 - "Vé đang hoạt động" tính theo N phút gần nhất, nên số liệu live chỉ có ý nghĩa ngay sau khi seed.
-- Dữ liệu ghi thẳng vào Mongo, không đi qua POST /events (nên không bị chống trùng/rate limit).
+- Sự kiện ghi thẳng vào database của Content Service, không đi qua POST /events (nên không bị chống trùng/rate limit).
+- Vé demo thuộc database của Auth Service nên được nạp/xóa qua API nội bộ /internal/tickets/demo (cần Auth Service đang chạy).
 """
 
 from __future__ import annotations
@@ -172,11 +173,12 @@ async def run_seed(args) -> None:
     from motor.motor_asyncio import AsyncIOMotorClient
 
     import stats
-    from event_store import MongoEventStore, MongoTicketStore
+    from auth_client import HttpTicketStore
+    from event_store import MongoEventStore
 
     client = AsyncIOMotorClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"), tz_aware=True)
     db = client[os.getenv("DB_NAME", "zoo")]
-    events, tickets = MongoEventStore(db), MongoTicketStore(db)
+    events, tickets = MongoEventStore(db), HttpTicketStore()
     try:
         await events.ensure_indexes()
         removed_t, removed_e = await tickets.delete_demo(), await events.delete_demo()
