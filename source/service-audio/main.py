@@ -1,5 +1,6 @@
 """
 Audio Service — TTS đúng giọng từng ngôn ngữ, cache MD5, khóa sinh song song.
+Database riêng: collection `audio_tracks`. Vé tra qua Auth Service, trạng thái audio báo về Content Service (HTTP nội bộ).
 Du khách: GET /audio/poi/{id}?lang= cần ticket_token.
 Admin: nghe thử + xem trạng thái.
 """
@@ -23,6 +24,7 @@ from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 
+from auth_client import fetch_ticket
 from jwt_auth import require_roles, require_valid_ticket, set_ticket_lookup
 
 log = logging.getLogger("audio")
@@ -87,10 +89,7 @@ async def lifespan(app: FastAPI):
     db = db_client[DB_NAME]
     await db["audio_tracks"].create_index([("poi_id", 1), ("lang", 1)], unique=True)
 
-    async def _lookup(ticket_id: str):
-        return await db["tickets"].find_one({"id": ticket_id})
-
-    set_ticket_lookup(_lookup)
+    set_ticket_lookup(fetch_ticket)  # vé thuộc database của Auth Service
     yield
     db_client.close()
     db_client = None
@@ -207,10 +206,25 @@ async def _save_track(poi_id: str, lang: str, data: dict) -> None:
         {"$set": {"poi_id": poi_id, "lang": lang, **data}},
         upsert=True,
     )
-    await db["pois"].update_one(
-        {"id": poi_id},
-        {"$set": {f"audio_status.{lang}": data}},
-    )
+    await _report_status_to_content(poi_id, lang, data)
+
+
+async def _report_status_to_content(poi_id: str, lang: str, data: dict) -> None:
+    """
+    POI thuộc database của Content Service nên Audio không ghi thẳng `audio_status` nữa,
+    mà báo qua API nội bộ. Best-effort: lỗi mạng chỉ ghi log, không làm hỏng việc sinh audio.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.put(
+                f"{CONTENT_SERVICE_URL}/internal/pois/{poi_id}/audio-status/{lang}",
+                json=data,
+                headers={"X-Internal-Key": INTERNAL_SERVICE_KEY},
+            )
+        if resp.status_code not in (200, 404):  # 404: POI đã bị xóa, bỏ qua
+            log.warning("Content Service từ chối audio_status %s/%s: HTTP %s", poi_id, lang, resp.status_code)
+    except Exception as exc:
+        log.warning("Không báo được audio_status %s/%s cho Content Service: %s", poi_id, lang, exc)
 
 
 async def _load_track(poi_id: str, lang: str) -> Optional[dict]:
@@ -422,8 +436,8 @@ async def internal_delete_poi_audio(poi_id: str, _: bool = Depends(require_inter
         _tracks.pop(key, None)
     db = _db()
     if db is not None:
+        # Content Service đã xóa POI (kèm audio_status) trước khi gọi endpoint này, nên chỉ dọn dữ liệu của Audio.
         await db["audio_tracks"].delete_many({"poi_id": poi_id})
-        await db["pois"].update_one({"id": poi_id}, {"$unset": {"audio_status": ""}})
     return {"deleted_files": removed}
 
 
