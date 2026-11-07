@@ -3,15 +3,56 @@
 # Xóa data: docker compose down -v
 
 services:
-  mongo:
+  # Mỗi service sở hữu một MongoDB riêng; service khác không kết nối trực tiếp.
+  mongo-auth:
     image: mongo:7
-    container_name: zoo-mongo
+    container_name: zoo-mongo-auth
+    ports:
+      - "127.0.0.1:27018:27017"
     networks:
       - zoo-network
     volumes:
-      - mongo_data:/data/db
+      - mongo_auth_data:/data/db
     environment:
-      - MONGO_INITDB_DATABASE=${DB_NAME:-zoo}
+      - MONGO_INITDB_DATABASE=${AUTH_DB_NAME:-zoo_auth}
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  mongo-content:
+    image: mongo:7
+    container_name: zoo-mongo-content
+    ports:
+      - "127.0.0.1:27019:27017"
+    networks:
+      - zoo-network
+    volumes:
+      - mongo_content_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=${CONTENT_DB_NAME:-zoo_content}
+    restart: always
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+
+  mongo-audio:
+    image: mongo:7
+    container_name: zoo-mongo-audio
+    ports:
+      - "127.0.0.1:27020:27017"
+    networks:
+      - zoo-network
+    volumes:
+      - mongo_audio_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=${AUDIO_DB_NAME:-zoo_audio}
     restart: always
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
@@ -31,8 +72,9 @@ services:
       - zoo-network
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
-      - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=${DB_NAME:-zoo}
+      - MONGO_URI=mongodb://mongo-auth:27017
+      - DB_NAME=${AUTH_DB_NAME:-zoo_auth}
+      - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD is required - set it in .env}
       - COUNTER_USERNAME=${COUNTER_USERNAME:-counter01}
@@ -43,7 +85,7 @@ services:
       - ACTIVATE_IP_RATE_LIMIT=${ACTIVATE_IP_RATE_LIMIT:-300}
       - ACTIVATE_RATE_WINDOW_SEC=${ACTIVATE_RATE_WINDOW_SEC:-60}
     depends_on:
-      mongo:
+      mongo-auth:
         condition: service_healthy
     restart: always
     healthcheck:
@@ -64,8 +106,9 @@ services:
       - zoo-network
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
-      - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=${DB_NAME:-zoo}
+      - MONGO_URI=mongodb://mongo-content:27017
+      - DB_NAME=${CONTENT_DB_NAME:-zoo_content}
+      - AUTH_SERVICE_URL=http://auth-service:8001
       - AUDIO_SERVICE_URL=http://audio-service:8003
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - N_ACTIVE_MINUTES=${N_ACTIVE_MINUTES:-10}
@@ -77,7 +120,7 @@ services:
       - EVENT_REQUIRE_GPS=${EVENT_REQUIRE_GPS:-false}
       - SEED_POI_PATH=/app/seed/pois.json
     depends_on:
-      mongo:
+      mongo-content:
         condition: service_healthy
       auth-service:
         condition: service_healthy
@@ -104,13 +147,14 @@ services:
       - zoo-network
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required - set it in .env}
-      - MONGO_URI=mongodb://mongo:27017
-      - DB_NAME=${DB_NAME:-zoo}
+      - MONGO_URI=mongodb://mongo-audio:27017
+      - DB_NAME=${AUDIO_DB_NAME:-zoo_audio}
+      - AUTH_SERVICE_URL=http://auth-service:8001
       - CONTENT_SERVICE_URL=http://content-service:8002
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - AUDIO_DIR=/app/audio_files
     depends_on:
-      mongo:
+      mongo-audio:
         condition: service_healthy
       auth-service:
         condition: service_healthy
@@ -129,5 +173,7 @@ networks:
     driver: bridge
 
 volumes:
-  mongo_data:
+  mongo_auth_data:
+  mongo_content_data:
+  mongo_audio_data:
   audio_files:
