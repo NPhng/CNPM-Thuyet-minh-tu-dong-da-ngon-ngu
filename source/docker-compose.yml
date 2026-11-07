@@ -7,6 +7,8 @@ services:
   mongo-auth:
     image: mongo:7
     container_name: zoo-mongo-auth
+    ports:
+      - "127.0.0.1:27018:27017"
     networks:
       - zoo-network
     volumes:
@@ -24,6 +26,8 @@ services:
   mongo-content:
     image: mongo:7
     container_name: zoo-mongo-content
+    ports:
+      - "127.0.0.1:27019:27017"
     networks:
       - zoo-network
     volumes:
@@ -41,6 +45,8 @@ services:
   mongo-audio:
     image: mongo:7
     container_name: zoo-mongo-audio
+    ports:
+      - "127.0.0.1:27020:27017"
     networks:
       - zoo-network
     volumes:
