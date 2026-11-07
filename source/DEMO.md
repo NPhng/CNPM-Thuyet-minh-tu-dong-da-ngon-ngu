@@ -1,5 +1,3 @@
-# Hướng dẫn chạy demo (MVP)
-
 ## 1. Chuẩn bị (làm 1 lần)
 - Cài **Docker Desktop**, mở lên và chờ biểu tượng cá voi báo "running".
 - Máy phải có Internet (Audio Service gọi Microsoft Edge TTS).
@@ -64,6 +62,6 @@ cd service-audio   && pip install -r requirements.txt pytest httpx && AUDIO_DIR=
 ```
 
 ## 6. Dữ liệu và seed
-- POI lưu trong MongoDB (volume `mongo_data`), MP3 lưu ở volume `audio_files`. `docker compose down` giữ nguyên dữ liệu; `docker compose down -v` xóa sạch.
+- Mỗi service có MongoDB riêng: auth (`mongo_auth_data`: users, tickets), content (`mongo_content_data`: pois, events), audio (`mongo_audio_data`: audio_tracks). MP3 lưu ở volume `audio_files`. `docker compose down` giữ nguyên dữ liệu; `docker compose down -v` xóa sạch.
 - Dữ liệu mẫu nằm ở `seed/pois.json` (20 điểm, 5 ngôn ngữ). Seed chỉ **thêm điểm có `id` chưa tồn tại**, không ghi đè điểm đã có. Muốn nạp lại sau khi sửa file: sửa điểm bằng API admin, hoặc `docker compose down -v`.
 - Tọa độ, tên khu và nội dung mô tả trong seed do AI soạn, cần đối chiếu thực tế với Thảo Cầm Viên; bản dịch zh/ja/ko nên nhờ người biết ngôn ngữ đó đọc lại.
