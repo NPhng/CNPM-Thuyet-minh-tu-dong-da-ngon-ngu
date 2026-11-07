@@ -1,5 +1,7 @@
 """
-Lưu trữ events (ghi) và tickets (chỉ đọc, do Auth Service ghi) — Mongo khi chạy thật, bộ nhớ khi TESTING.
+Lưu trữ events (Mongo khi chạy thật, bộ nhớ khi TESTING) và vé khi TESTING.
+
+Vé KHÔNG nằm trong database của Content Service: khi chạy thật dùng auth_client.HttpTicketStore (gọi Auth Service).
 
 Không import pymongo/motor ở mức module để phần logic và test chạy được mà không cần cài driver.
 Mọi `ts` / `created_at` trả ra đều là datetime UTC có tzinfo.
@@ -147,29 +149,3 @@ class MemoryTicketStore:
         for i in ids:
             del self.docs[i]
         return len(ids)
-
-
-class MongoTicketStore:
-    """Đọc collection `tickets` do Auth Service quản lý (cùng database)."""
-
-    def __init__(self, db):
-        self.col = db["tickets"]
-
-    async def find(self, ticket_id: str) -> Optional[dict]:
-        return await self.col.find_one({"id": ticket_id})
-
-    async def insert_many(self, docs: list[dict]) -> None:
-        if docs:
-            await self.col.insert_many([dict(d) for d in docs])
-
-    async def created_between(self, start: datetime, end: datetime) -> list[dict]:
-        cursor = self.col.find(
-            {"created_at": {"$gte": as_utc(start), "$lt": as_utc(end)}},
-            {"_id": 0, "id": 1, "created_at": 1},
-        )
-        docs = await cursor.to_list(length=None)
-        return [{"id": d.get("id"), "created_at": as_utc(d["created_at"])} for d in docs]
-
-    async def delete_demo(self) -> int:
-        res = await self.col.delete_many({"demo": True})
-        return res.deleted_count

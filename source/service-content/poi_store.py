@@ -80,6 +80,14 @@ class MemoryPoiStore:
     async def delete(self, poi_id: str) -> Optional[dict]:
         return self.docs.pop(poi_id, None)
 
+    async def set_audio_status(self, poi_id: str, lang: str, data: dict) -> bool:
+        """Audio Service báo trạng thái audio của một ngôn ngữ. False nếu POI không còn."""
+        doc = self.docs.get(poi_id)
+        if doc is None:
+            return False
+        doc.setdefault("audio_status", empty_audio_status())[lang] = deepcopy(data)
+        return True
+
     async def seed_if_empty(self) -> int:
         if self.docs:
             return 0
@@ -113,6 +121,11 @@ class MongoPoiStore:
         if doc:
             await self.col.delete_one({"id": poi_id})
         return doc
+
+    async def set_audio_status(self, poi_id: str, lang: str, data: dict) -> bool:
+        """Audio Service báo trạng thái audio của một ngôn ngữ. False nếu POI không còn."""
+        res = await self.col.update_one({"id": poi_id}, {"$set": {f"audio_status.{lang}": data}})
+        return res.matched_count > 0
 
     async def seed_if_empty(self) -> int:
         n = 0
