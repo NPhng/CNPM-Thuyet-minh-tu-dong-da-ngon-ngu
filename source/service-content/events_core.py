@@ -112,6 +112,7 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     dphi = math.radians(lat2 - lat1)
     dlmb = math.radians(lon2 - lon1)
     a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlmb / 2) ** 2
+    a = min(1.0, max(0.0, a))
     return r * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 

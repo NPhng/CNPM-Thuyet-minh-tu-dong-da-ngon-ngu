@@ -44,9 +44,10 @@ from poi_store import (
 
 log = logging.getLogger("content")
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "zoo")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27019")
+DB_NAME = os.getenv("DB_NAME", "zoo_content")
 TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
+MAX_SEARCH_RADIUS_M = 100000.0
 
 db_client: Optional[AsyncIOMotorClient] = None
 store = MemoryPoiStore()
@@ -220,13 +221,32 @@ def _translations_dump(translations: dict) -> dict:
 def _nearby_payload(pois: list[dict], lat: float, lon: float, search_radius_m: float) -> dict:
     nearby = []
     for poi in pois:
-        distance = calculate_distance(lat, lon, poi["lat"], poi["lon"])
+        try:
+            plat = float(poi.get("lat"))
+            plon = float(poi.get("lon"))
+            if math.isnan(plat) or math.isnan(plon) or math.isinf(plat) or math.isinf(plon):
+                continue
+            if not (-90 <= plat <= 90 and -180 <= plon <= 180):
+                continue
+            rad_raw = poi.get("radius_m")
+            if rad_raw is None:
+                rad = 30.0
+            else:
+                rad = float(rad_raw)
+                if math.isnan(rad) or math.isinf(rad) or rad <= 0:
+                    log.warning("Bỏ qua POI %s do radius_m không hợp lệ: %s", poi.get("id"), rad_raw)
+                    continue
+        except (TypeError, ValueError):
+            log.warning("Bỏ qua POI %s do toạ độ/bán kính hỏng", poi.get("id"))
+            continue
+
+        distance = calculate_distance(lat, lon, plat, plon)
         if distance <= search_radius_m:
             nearby.append(
                 {
                     **visitor_poi(poi),
                     "distance_m": round(distance, 1),
-                    "within_poi_radius": distance <= float(poi["radius_m"]),
+                    "within_poi_radius": distance <= rad,
                 }
             )
     nearby.sort(key=lambda x: x["distance_m"])
@@ -265,16 +285,26 @@ async def get_all_pois(category: Optional[str] = None):
 
 @app.get("/pois/nearby")
 async def search_nearby_pois(
-    lat: float = Query(...),
-    lon: float = Query(...),
-    search_radius_m: float = Query(50.0, gt=0, description="Bán kính tìm kiếm GPS, khác radius_m của POI"),
+    lat: float = Query(..., ge=-90, le=90, allow_inf_nan=False),
+    lon: float = Query(..., ge=-180, le=180, allow_inf_nan=False),
+    search_radius_m: float = Query(
+        50.0,
+        gt=0,
+        le=MAX_SEARCH_RADIUS_M,
+        allow_inf_nan=False,
+        description="Bán kính tìm kiếm GPS, khác radius_m của POI",
+    ),
 ):
     pois = await get_store().list_all()
     return _nearby_payload(pois, lat, lon, search_radius_m)
 
 
 @app.get("/pois/nearby/search")
-async def search_nearby_pois_alias(lat: float, lon: float, radius_m: float = 50.0):
+async def search_nearby_pois_alias(
+    lat: float = Query(..., ge=-90, le=90, allow_inf_nan=False),
+    lon: float = Query(..., ge=-180, le=180, allow_inf_nan=False),
+    radius_m: float = Query(50.0, gt=0, le=MAX_SEARCH_RADIUS_M, allow_inf_nan=False),
+):
     """Alias cũ: radius_m ở đây là search_radius_m."""
     pois = await get_store().list_all()
     return _nearby_payload(pois, lat, lon, radius_m)
@@ -284,7 +314,10 @@ async def search_nearby_pois_alias(lat: float, lon: float, radius_m: float = 50.
 async def get_poi(poi_id: str):
     poi = await get_store().find(poi_id)
     if not poi:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm với ID '{poi_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm với ID '{poi_id}'"},
+        )
     return visitor_poi(poi)
 
 
@@ -293,7 +326,10 @@ async def get_poi_audio_status(poi_id: str, _: dict = Depends(require_roles("adm
     """Admin: trạng thái audio từng ngôn ngữ (pending / generating / ready / error)."""
     poi = await get_store().find(poi_id)
     if not poi:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+        )
     return {"poi_id": poi_id, "audio_status": poi.get("audio_status") or empty_audio_status()}
 
 
@@ -349,7 +385,10 @@ async def update_poi(
 ):
     poi = await get_store().find(poi_id)
     if not poi:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+        )
     changes = poi_data.model_dump(exclude_none=True)
     regen_langs: list[str] = []
     if "category" in changes:
@@ -383,7 +422,10 @@ async def patch_translation(
         raise HTTPException(status_code=400, detail=f"Ngôn ngữ không hỗ trợ. Chọn: {list(LANGS)}")
     poi = await get_store().find(poi_id)
     if not poi:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+        )
     translations = dict(poi.get("translations") or {})
     current = dict(translations.get(lang) or {})
     patch = body.model_dump(exclude_none=True)
@@ -418,7 +460,10 @@ async def delete_poi(
 ):
     deleted = await get_store().delete(poi_id)
     if not deleted:
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+        )
     background_tasks.add_task(delete_poi_audio, poi_id)
     return {
         "message": f"Đã xóa địa điểm '{deleted.get('name')}' thành công",

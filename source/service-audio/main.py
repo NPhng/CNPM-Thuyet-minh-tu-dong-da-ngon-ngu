@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,9 +32,10 @@ log = logging.getLogger("audio")
 
 CONTENT_SERVICE_URL = os.getenv("CONTENT_SERVICE_URL", "http://content-service:8002").rstrip("/")
 AUDIO_DIR = os.getenv("AUDIO_DIR", "/app/audio_files")
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "zoo")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27020")
+DB_NAME = os.getenv("DB_NAME", "zoo_audio")
 TESTING = os.getenv("TESTING", "").lower() in {"1", "true", "yes"}
+EDGE_TTS_TIMEOUT_SEC = float(os.getenv("EDGE_TTS_TIMEOUT_SEC", "45"))
 
 _WEAK_INTERNAL_KEYS = {"internal-secret-change-me", "change-me-internal-key"}
 
@@ -156,31 +158,64 @@ async def get_poi_from_content_service(poi_id: str) -> dict:
         try:
             response = await client.get(f"{CONTENT_SERVICE_URL}/pois/{poi_id}", timeout=5.0)
             if response.status_code == 404:
-                raise HTTPException(status_code=404, detail=f"Không tìm thấy địa điểm '{poi_id}'")
+                raise HTTPException(
+                    status_code=404,
+                    detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+                )
             if response.status_code != 200:
-                raise HTTPException(status_code=502, detail="Content Service lỗi")
+                raise HTTPException(
+                    status_code=502,
+                    detail={"error": "content_service_error", "message": "Content Service lỗi"},
+                )
             return response.json()
         except HTTPException:
             raise
         except (httpx.ConnectError, httpx.TimeoutException):
-            raise HTTPException(status_code=503, detail="Content Service không phản hồi")
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "content_unavailable", "message": "Content Service không phản hồi"},
+            )
 
 
 async def generate_tts_audio(text: str, language: str, output_path: str):
     voice = VOICE_MAP.get(language)
     if not voice:
         raise ValueError(f"Không có giọng cho ngôn ngữ {language}")
-    tmp_path = output_path + ".tmp"
-    try:
-        communicate = edge_tts.Communicate(text=text, voice=voice)
-        await communicate.save(tmp_path)
-        if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
-            raise RuntimeError("Edge TTS trả về file rỗng")
-        os.replace(tmp_path, output_path)
-    except Exception:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-        raise
+
+    timeout_sec = float(os.getenv("EDGE_TTS_TIMEOUT_SEC", str(EDGE_TTS_TIMEOUT_SEC)))
+    backoffs = [0.01, 0.02] if TESTING else [1.0, 3.0]
+    max_attempts = len(backoffs) + 1
+    last_exc = None
+
+    for attempt in range(max_attempts):
+        tmp_path = f"{output_path}.tmp.{uuid.uuid4().hex}"
+        try:
+            communicate = edge_tts.Communicate(text=text, voice=voice)
+            await asyncio.wait_for(communicate.save(tmp_path), timeout=timeout_sec)
+            if not os.path.exists(tmp_path) or os.path.getsize(tmp_path) == 0:
+                raise RuntimeError("Edge TTS trả về file rỗng")
+            os.replace(tmp_path, output_path)
+            return
+        except Exception as exc:
+            last_exc = exc
+            if os.path.exists(tmp_path):
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+            if attempt < len(backoffs):
+                log.warning(
+                    "Edge TTS thất bại lần %d/%d (%s). Thử lại sau %.1fs: %s",
+                    attempt + 1,
+                    max_attempts,
+                    language,
+                    backoffs[attempt],
+                    exc,
+                )
+                await asyncio.sleep(backoffs[attempt])
+
+    log.error("Edge TTS thất bại sau %d lần cho ngôn ngữ %s: %s", max_attempts, language, last_exc)
+    raise RuntimeError(f"Edge TTS thất bại sau {max_attempts} lần thử: {last_exc}")
 
 
 async def _lock_for(key: str) -> asyncio.Lock:
@@ -253,12 +288,18 @@ def _cleanup_old_files(poi_id: str, lang: str, keep_filename: Optional[str] = No
 
 async def ensure_poi_audio(poi_id: str, language: str, poi: Optional[dict] = None) -> dict:
     if language not in VOICE_MAP:
-        raise HTTPException(status_code=400, detail=f"Ngôn ngữ '{language}' không được hỗ trợ. Chọn: {list(VOICE_MAP)}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unsupported_language", "message": f"Ngôn ngữ '{language}' không được hỗ trợ. Chọn: {list(VOICE_MAP)}"},
+        )
     if poi is None:
         poi = await get_poi_from_content_service(poi_id)
     picked = pick_poi_content(poi, language)
     if not picked:
-        raise HTTPException(status_code=404, detail=f"Chưa có bản dịch {language} cho địa điểm này")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "no_translation", "message": f"Chưa có bản dịch {language} cho địa điểm này"},
+        )
     name, text, lang, voice = picked
     full_text = f"{name}. {text}" if name else text
     digest = audio_hash(full_text, lang, voice)
@@ -267,8 +308,24 @@ async def ensure_poi_audio(poi_id: str, language: str, poi: Optional[dict] = Non
 
     lock = await _lock_for(f"{poi_id}:{lang}")
     async with lock:
+        # Nếu file đã tồn tại trên đĩa và size > 0: tên file chứa hash nên coi là cache hit ngay
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            existing = await _load_track(poi_id, lang)
+            ready = {
+                **(existing or {}),
+                "status": "ready",
+                "hash": digest,
+                "filename": filename,
+                "voice": voice,
+                "cached": True,
+                "updated_at": (existing.get("updated_at") if existing else None) or now_utc().isoformat(),
+            }
+            if not existing or existing.get("hash") != digest or existing.get("status") != "ready":
+                await _save_track(poi_id, lang, {k: v for k, v in ready.items() if k != "cached"})
+            return ready
+
         existing = await _load_track(poi_id, lang)
-        if existing and existing.get("hash") == digest and os.path.exists(output_path):
+        if existing and existing.get("hash") == digest and os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             ready = {
                 **existing,
                 "status": "ready",
@@ -316,7 +373,10 @@ async def ensure_poi_audio(poi_id: str, language: str, poi: Optional[dict] = Non
                     "voice": voice,
                 },
             )
-            raise HTTPException(status_code=502, detail="Edge TTS gặp lỗi khi tạo audio, vui lòng thử lại sau")
+            raise HTTPException(
+                status_code=502,
+                detail={"error": "tts_failed", "message": "Edge TTS gặp lỗi khi tạo audio, vui lòng thử lại sau"},
+            )
 
         _cleanup_old_files(poi_id, lang, keep_filename=filename)
         ready = {
@@ -421,8 +481,25 @@ async def _fetch_all_pois(attempts: int = 5, delay: float = 3.0) -> list[dict]:
 
 async def _warmup_all():
     """Sinh sẵn audio cho mọi POI × ngôn ngữ, chạy nền; file đã có (cùng hash) thì bỏ qua."""
-    for poi in await _fetch_all_pois():
-        await _generate_langs(poi["id"], list(VOICE_MAP))
+    pois = await _fetch_all_pois()
+    sem = asyncio.Semaphore(3)
+
+    async def _warmup_one(poi_id: str, lang: str, poi: dict):
+        if not pick_poi_content(poi, lang):
+            return
+        async with sem:
+            try:
+                await ensure_poi_audio(poi_id, lang, poi=poi)
+            except Exception as exc:
+                log.warning("Warmup sinh audio %s/%s lỗi: %s", poi_id, lang, exc)
+
+    tasks = [
+        _warmup_one(poi["id"], lang, poi)
+        for poi in pois
+        for lang in list(VOICE_MAP)
+    ]
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @app.delete("/internal/pois/{poi_id}")
@@ -445,16 +522,28 @@ async def internal_delete_poi_audio(poi_id: str, _: bool = Depends(require_inter
 async def text_to_speech(request: TextToSpeechRequest, _: dict = Depends(require_roles("admin"))):
     """Công cụ admin: đọc văn bản tùy ý. Du khách dùng GET /audio/poi/{id}."""
     if request.language not in VOICE_MAP:
-        raise HTTPException(status_code=400, detail=f"Ngôn ngữ '{request.language}' không được hỗ trợ. Chọn: {list(VOICE_MAP)}")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "unsupported_language", "message": f"Ngôn ngữ '{request.language}' không được hỗ trợ. Chọn: {list(VOICE_MAP)}"},
+        )
     if len(request.text) > 5000:
-        raise HTTPException(status_code=400, detail="Text quá dài (tối đa 5000 ký tự)")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "text_too_long", "message": "Text quá dài (tối đa 5000 ký tự)"},
+        )
     filename = make_audio_filename(request.text, request.language)
     output_path = os.path.join(AUDIO_DIR, filename)
-    if not os.path.exists(output_path):
-        try:
-            await generate_tts_audio(request.text, request.language, output_path)
-        except Exception:
-            raise HTTPException(status_code=502, detail="Edge TTS gặp lỗi khi tạo audio, vui lòng thử lại sau")
+
+    lock = await _lock_for(f"tts:{filename}")
+    async with lock:
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            try:
+                await generate_tts_audio(request.text, request.language, output_path)
+            except Exception:
+                raise HTTPException(
+                    status_code=502,
+                    detail={"error": "tts_failed", "message": "Edge TTS gặp lỗi khi tạo audio, vui lòng thử lại sau"},
+                )
     file_size = os.path.getsize(output_path) / 1024
     return {
         "message": "Tạo audio thành công!",
@@ -468,10 +557,16 @@ async def text_to_speech(request: TextToSpeechRequest, _: dict = Depends(require
 @app.get("/audio/download/{filename}")
 async def download_audio(filename: str, _: dict = Depends(require_roles("admin"))):
     if not filename.endswith(".mp3") or os.path.basename(filename) != filename:
-        raise HTTPException(status_code=400, detail="Chỉ hỗ trợ file MP3")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "invalid_audio_filename", "message": "Chỉ hỗ trợ file MP3"},
+        )
     file_path = os.path.join(AUDIO_DIR, filename)
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File audio không tồn tại")
+        raise HTTPException(
+            status_code=404,
+            detail={"error": "audio_not_found", "message": "File audio không tồn tại"},
+        )
     return FileResponse(path=file_path, media_type="audio/mpeg", filename=filename)
 
 
