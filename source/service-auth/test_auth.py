@@ -1,8 +1,4 @@
-"""
-Test Auth Service — Giai đoạn 1.
-Chạy: TESTING=1 JWT_SECRET=test-secret pytest test_auth.py -v
-"""
-
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
@@ -20,7 +16,7 @@ from fastapi.testclient import TestClient
 import main as auth_main
 from jwt_auth import JWT_ALGORITHM, JWT_SECRET, decode_staff_token, decode_ticket_token, set_ticket_lookup
 from main import app, check_password, hash_password, make_staff_token
-from tickets import VN_TZ, compute_expires_at, generate_ticket_code, ticket_status
+from tickets import VN_TZ, activate_ticket, compute_expires_at, generate_ticket_code, make_ticket_token, ticket_status
 
 client = TestClient(app)
 
@@ -339,6 +335,7 @@ class FakeCollection:
         self.docs = []
 
     async def find_one(self, query, *args, **kwargs):
+        await asyncio.sleep(0)
         for doc in self.docs:
             if _matches(doc, query):
                 return doc
@@ -351,6 +348,7 @@ class FakeCollection:
         return result
 
     async def update_one(self, query, update):
+        await asyncio.sleep(0)
         matched = 0
         for doc in self.docs:
             if _matches(doc, query):
@@ -504,7 +502,8 @@ def test_device_switch_invalidates_old_token(ticket_db):
 
     stale = client.get("/tickets/me", headers={"Authorization": f"Bearer {old_token}"})
     assert stale.status_code == 401
-    assert "thay thế" in stale.json()["detail"]
+    assert stale.json()["detail"]["error"] == "token_superseded"
+    assert "thay thế" in stale.json()["detail"]["message"]
 
     fresh = client.get("/tickets/me", headers={"Authorization": f"Bearer {new_body['ticket_token']}"})
     assert fresh.status_code == 200
@@ -522,11 +521,13 @@ def test_ticket_expires_end_of_day_vietnam():
     assert expires.second == 59
     assert expires.utcoffset() == timedelta(hours=7)
 
-    still_valid = datetime(2026, 10, 23, 23, 59, 59, tzinfo=VN_TZ)
-    too_late = datetime(2026, 10, 24, 0, 0, 0, tzinfo=VN_TZ)
     ticket = {"expires_at": expires, "device_id": None}
-    assert ticket_status(ticket, at=still_valid) == "unused"
-    assert ticket_status(ticket, at=too_late) == "expired"
+    t_before = datetime(2026, 10, 23, 23, 59, 58, tzinfo=VN_TZ)
+    t_boundary = datetime(2026, 10, 23, 23, 59, 59, tzinfo=VN_TZ)
+    t_late = datetime(2026, 10, 24, 0, 0, 0, tzinfo=VN_TZ)
+    assert ticket_status(ticket, at=t_before) == "unused"
+    assert ticket_status(ticket, at=t_boundary) == "expired"
+    assert ticket_status(ticket, at=t_late) == "expired"
 
 
 def test_generate_ticket_code_format():
@@ -535,3 +536,110 @@ def test_generate_ticket_code_format():
     assert parts[0] == "ZCV"
     assert all(len(p) == 4 for p in parts[1:])
     assert len("".join(parts[1:])) == 12
+
+
+def test_activate_race_condition(ticket_db):
+    created = _create_ticket(ticket_db)
+    code = created["code"]
+
+    async def _run_concurrent():
+        return await asyncio.gather(
+            activate_ticket(ticket_db, code, DEVICE_A),
+            activate_ticket(ticket_db, code, DEVICE_B),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(_run_concurrent())
+    success = [r for r in results if isinstance(r, dict)]
+    errors = [r for r in results if isinstance(r, HTTPException)]
+    assert len(success) == 1
+    assert len(errors) == 1
+    assert errors[0].status_code == 409
+    assert errors[0].detail["error"] == "used_on_other_device"
+    assert errors[0].detail["confirm_required"] is True
+
+
+def test_compute_expires_at_invalid_ttl(monkeypatch):
+    import tickets
+    now = datetime(2026, 11, 8, 10, 0, 0, tzinfo=VN_TZ)
+
+    # TTL không hợp lệ: "8hrs", "abc", "xyz123" -> fallback về end_of_day không ném 500/ValueError
+    for bad_ttl in ["8hrs", "abc", "xyz123", "---"]:
+        monkeypatch.setattr(tickets, "TICKET_TTL", bad_ttl)
+        exp = compute_expires_at(now)
+        assert exp.hour == 23
+        assert exp.minute == 59
+        assert exp.second == 59
+
+
+def test_ticket_status_matches_jwt_boundary():
+    created = datetime(2026, 10, 23, 8, 0, 0, tzinfo=VN_TZ)
+    expires = compute_expires_at(created)
+    ticket = {"expires_at": expires, "device_id": None}
+
+    # Tại 23:59:58 (trước biên): còn hạn
+    t_235958 = datetime(2026, 10, 23, 23, 59, 58, tzinfo=VN_TZ)
+    assert ticket_status(ticket, at=t_235958) == "unused"
+
+    # Tại 23:59:59 (chính biên exp): ticket_status khớp với PyJWT (exp <= now) coi là hết hạn
+    t_235959 = datetime(2026, 10, 23, 23, 59, 59, tzinfo=VN_TZ)
+    assert ticket_status(ticket, at=t_235959) == "expired"
+
+    # Tại 00:00:00 hôm sau: hết hạn
+    t_000000 = datetime(2026, 10, 24, 0, 0, 0, tzinfo=VN_TZ)
+    assert ticket_status(ticket, at=t_000000) == "expired"
+
+
+def test_require_valid_ticket_db_expired_defense(ticket_db):
+    created = _create_ticket(ticket_db)
+    ticket_doc = ticket_db["tickets"].docs[0]
+    ticket_doc["device_id"] = DEVICE_A
+    ticket_doc["token_version"] = 1
+    # DB lưu expires_at đã qua
+    ticket_doc["expires_at"] = datetime.now(timezone.utc) - timedelta(seconds=10)
+
+    # Token được ký với exp trong tương lai
+    future_exp = datetime.now(timezone.utc) + timedelta(hours=2)
+    token = make_ticket_token(created["id"], DEVICE_A, 1, future_exp)
+
+    resp = client.get("/tickets/me", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 401
+    assert resp.json()["detail"]["error"] == "ticket_expired"
+    assert resp.json()["detail"]["message"] == "Vé đã hết hạn"
+
+
+def test_get_db_service_unavailable(monkeypatch):
+    monkeypatch.setattr(auth_main, "db_client", None)
+    with pytest.raises(HTTPException) as exc:
+        auth_main.get_db()
+    assert exc.value.status_code == 503
+    assert exc.value.detail == {"error": "service_unavailable", "message": "Chưa kết nối cơ sở dữ liệu"}
+
+
+def test_jwt_auth_ticket_errors_structured(ticket_db):
+    # 1. Missing bearer credentials
+    r_no_auth = client.get("/tickets/me")
+    assert r_no_auth.status_code == 401
+    assert r_no_auth.json()["detail"]["error"] == "ticket_token_required"
+
+    # 2. Invalid ticket token format/signature
+    r_invalid = client.get("/tickets/me", headers={"Authorization": "Bearer invalid.jwt.token"})
+    assert r_invalid.status_code == 401
+    assert r_invalid.json()["detail"]["error"] == "invalid_ticket_token"
+
+    # 3. Staff token sent to ticket endpoint
+    r_wrong_type = client.get("/tickets/me", headers={"Authorization": f"Bearer {_admin_token()}"})
+    assert r_wrong_type.status_code == 401
+    assert r_wrong_type.json()["detail"]["error"] == "not_ticket_token"
+
+    # 4. Ticket token for non-existent ticket in DB
+    non_existent_token = make_ticket_token("non-existent-id", DEVICE_A, 1, datetime.now(timezone.utc) + timedelta(hours=1))
+    r_not_found = client.get("/tickets/me", headers={"Authorization": f"Bearer {non_existent_token}"})
+    assert r_not_found.status_code == 401
+    assert r_not_found.json()["detail"]["error"] == "ticket_not_found"
+
+    # 5. Service unavailable if lookup not configured
+    set_ticket_lookup(None)
+    r_503 = client.get("/tickets/me", headers={"Authorization": f"Bearer {non_existent_token}"})
+    assert r_503.status_code == 503
+    assert r_503.json()["detail"]["error"] == "service_unavailable"
