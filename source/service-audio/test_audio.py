@@ -1,7 +1,3 @@
-"""
-Test Audio Service (giai đoạn 3). Chạy: pytest -v
-Mock TTS (không gọi Edge TTS thật) và mock Content Service; không cần MongoDB.
-"""
 import os
 
 os.environ.setdefault("TESTING", "1")
@@ -23,6 +19,7 @@ from jwt_auth import JWT_ALGORITHM, JWT_SECRET, set_ticket_lookup
 from main import VOICE_MAP, app, pick_poi_content
 
 real_generate_tts_audio = audio_main.generate_tts_audio  # bản thật, dùng để test chọn giọng
+real_get_poi_from_content_service = audio_main.get_poi_from_content_service
 
 client = TestClient(app)
 
@@ -82,7 +79,10 @@ def env(monkeypatch, tmp_path):
 
     async def fake_get_poi(poi_id):
         if poi_id != poi["id"] and poi_id != "p10":
-            raise HTTPException(status_code=404, detail="không có")
+            raise HTTPException(
+                status_code=404,
+                detail={"error": "poi_not_found", "message": f"Không tìm thấy địa điểm '{poi_id}'"},
+            )
         return poi if poi_id == poi["id"] else {**poi, "id": "p10"}
 
     async def fake_ticket_lookup(ticket_id):
@@ -364,3 +364,181 @@ def test_tts_and_download_validation(env):
     assert client.post("/tts", json={"text": "x" * 5001, "language": "vi"}, headers=h).status_code == 400
     assert client.get("/audio/download/abc.txt", headers=h).status_code == 400
     assert client.get("/audio/download/khong-co.mp3", headers=h).status_code == 404
+
+
+# ---------- Các bài test bổ sung theo Lệnh 1 - 5 ----------
+
+def test_generate_tts_timeout_and_lock_released(env, monkeypatch, tmp_path):
+    class HangingCommunicate:
+        def __init__(self, text, voice):
+            pass
+
+        async def save(self, path):
+            await asyncio.sleep(10.0)
+
+    monkeypatch.setattr(audio_main.edge_tts, "Communicate", HangingCommunicate)
+    monkeypatch.setenv("EDGE_TTS_TIMEOUT_SEC", "0.05")
+    monkeypatch.setattr(audio_main, "generate_tts_audio", real_generate_tts_audio)
+
+    # 1. Gọi ensure_poi_audio bị timeout, raise 502 tts_failed
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(audio_main.ensure_poi_audio("p1", "vi", poi=env.poi))
+    assert exc.value.status_code == 502
+    assert exc.value.detail["error"] == "tts_failed"
+    assert audio_main._tracks[("p1", "vi")]["status"] == "error"
+
+    # 2. Lock phải được giải phóng, request thứ hai không bị deadlock kẹt
+    class FastCommunicate:
+        def __init__(self, text, voice):
+            pass
+
+        async def save(self, path):
+            with open(path, "wb") as f:
+                f.write(b"ID3ok")
+
+    monkeypatch.setattr(audio_main.edge_tts, "Communicate", FastCommunicate)
+    res = asyncio.run(audio_main.ensure_poi_audio("p1", "vi", poi=env.poi))
+    assert res["status"] == "ready"
+
+
+def test_generate_tts_retry_success(monkeypatch, tmp_path):
+    calls = []
+
+    class RetryCommunicate:
+        def __init__(self, text, voice):
+            pass
+
+        async def save(self, path):
+            calls.append(path)
+            if len(calls) == 1:
+                raise RuntimeError("mạng chập chờn lần 1")
+            with open(path, "wb") as f:
+                f.write(b"ID3recovered")
+
+    monkeypatch.setattr(audio_main.edge_tts, "Communicate", RetryCommunicate)
+    out = str(tmp_path / "retry_test.mp3")
+    asyncio.run(audio_main.generate_tts_audio("xin chào", "vi", out))
+    assert len(calls) == 2
+    assert os.path.exists(out)
+    with open(out, "rb") as f:
+        assert f.read() == b"ID3recovered"
+
+
+def test_ensure_poi_audio_cache_hit_when_file_exists_without_track(env):
+    h = ticket()
+    # 1. Tạo sẵn file hợp lệ trên đĩa nhưng tracks trống
+    picked = pick_poi_content(env.poi, "vi")
+    name, text, lang, voice = picked
+    full_text = f"{name}. {text}"
+    digest = audio_main.audio_hash(full_text, lang, voice)
+    filename = f"p1_vi_{digest}.mp3"
+    filepath = os.path.join(env.dir, filename)
+    with open(filepath, "wb") as f:
+        f.write(b"ID3pre-existing")
+
+    audio_main._tracks.clear()
+    assert audio_main._tracks == {}
+
+    # 2. Gọi API visitor: phát hiện file đã có trên đĩa -> cache hit, không gọi TTS
+    r = client.get("/audio/poi/p1?lang=vi", headers=h)
+    assert r.status_code == 200
+    assert r.content == b"ID3pre-existing"
+    assert env.tts.calls == []
+
+    # 3. Track đã được tự động upsert lại
+    track = audio_main._tracks.get(("p1", "vi"))
+    assert track is not None
+    assert track["status"] == "ready"
+    assert track["filename"] == filename
+
+
+def test_tts_concurrent_requests_share_lock(env):
+    h = staff("admin")
+    body = {"text": "Xin chào thế giới song song", "language": "vi"}
+
+    # Hai request cùng nội dung gửi đồng thời
+    r1 = client.post("/tts", json=body, headers=h)
+    r2 = client.post("/tts", json=body, headers=h)
+    assert r1.status_code == 200
+    assert r2.status_code == 200
+    assert r1.json()["audio_url"] == r2.json()["audio_url"]
+    filename = r1.json()["audio_url"].rsplit("/", 1)[1]
+    assert os.path.exists(os.path.join(env.dir, filename))
+
+
+def test_warmup_all_parallel_semaphore(env, monkeypatch):
+    pois = [
+        {
+            "id": f"poi_{i}",
+            "name": f"Điểm {i}",
+            "translations": {
+                "vi": {"name": f"Điểm {i}", "description": f"Mô tả {i}"},
+                "en": {"name": f"Point {i}", "description": f"Desc {i}"},
+            },
+        }
+        for i in range(5)
+    ]
+
+    async def fake_fetch_all_pois(*args, **kwargs):
+        return pois
+
+    active_count = 0
+    max_active = 0
+
+    original_ensure = audio_main.ensure_poi_audio
+
+    async def tracking_ensure(poi_id, lang, poi=None):
+        nonlocal active_count, max_active
+        active_count += 1
+        max_active = max(max_active, active_count)
+        await asyncio.sleep(0.01)
+        res = await original_ensure(poi_id, lang, poi=poi)
+        active_count -= 1
+        return res
+
+    monkeypatch.setattr(audio_main, "_fetch_all_pois", fake_fetch_all_pois)
+    monkeypatch.setattr(audio_main, "ensure_poi_audio", tracking_ensure)
+
+    asyncio.run(audio_main._warmup_all())
+    # Concurrency tối đa bị khống chế bởi Semaphore(3)
+    assert max_active <= 3
+    # Đã sinh đủ cho 5 POI x 2 ngôn ngữ = 10 tracks
+    assert len(audio_main._tracks) == 10
+
+
+def test_audio_structured_error_details(env, monkeypatch):
+    h = ticket()
+
+    # 1. 400 unsupported_language
+    r_unsupported = client.get("/audio/poi/p1?lang=fr", headers=h)
+    assert r_unsupported.status_code == 400
+    assert r_unsupported.json()["detail"]["error"] == "unsupported_language"
+
+    # 2. 404 poi_not_found
+    r_no_poi = client.get("/audio/poi/khong-ton-tai?lang=vi", headers=h)
+    assert r_no_poi.status_code == 404
+    assert r_no_poi.json()["detail"]["error"] == "poi_not_found"
+
+    # 3. 404 no_translation
+    del env.poi["translations"]["zh"]
+    r_no_trans = client.get("/audio/poi/p1?lang=zh", headers=h)
+    assert r_no_trans.status_code == 404
+    assert r_no_trans.json()["detail"]["error"] == "no_translation"
+
+    # 4. 502 tts_failed
+    env.tts.fail_langs.add("en")
+    r_tts_fail = client.get("/audio/poi/p1?lang=en", headers=h)
+    assert r_tts_fail.status_code == 502
+    assert r_tts_fail.json()["detail"]["error"] == "tts_failed"
+
+    # 5. 503 content_unavailable
+    async def boom_get(self, *args, **kwargs):
+        import httpx
+        raise httpx.ConnectError("Connection refused")
+
+    # Phục hồi hàm get_poi_from_content_service thật để kiểm tra bắt httpx.ConnectError
+    monkeypatch.setattr(audio_main, "get_poi_from_content_service", real_get_poi_from_content_service)
+    monkeypatch.setattr(audio_main.httpx.AsyncClient, "get", boom_get)
+    r_503 = client.get("/audio/poi/p2?lang=vi", headers=h)
+    assert r_503.status_code == 503
+    assert r_503.json()["detail"]["error"] == "content_unavailable"

@@ -153,6 +153,7 @@ services:
       - CONTENT_SERVICE_URL=http://content-service:8002
       - INTERNAL_SERVICE_KEY=${INTERNAL_SERVICE_KEY:?INTERNAL_SERVICE_KEY is required - set it in .env}
       - AUDIO_DIR=/app/audio_files
+      - EDGE_TTS_TIMEOUT_SEC=${EDGE_TTS_TIMEOUT_SEC:-45}
     depends_on:
       mongo-audio:
         condition: service_healthy
