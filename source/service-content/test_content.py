@@ -195,6 +195,75 @@ def test_nearby_requires_lat_lon(client):
     assert client.get("/pois/nearby").status_code == 422
 
 
+def test_nearby_invalid_coords_return_422(client):
+    invalid_cases = [
+        "lat=91&lon=106",
+        "lat=-91&lon=106",
+        "lat=10&lon=181",
+        "lat=inf&lon=106",
+        "lat=nan&lon=106",
+        "lat=10&lon=nan",
+    ]
+    for route in ["/pois/nearby", "/pois/nearby/search"]:
+        for query in invalid_cases:
+            res = client.get(f"{route}?{query}")
+            assert res.status_code == 422, f"Failed for {route}?{query}: got {res.status_code}"
+
+
+def test_nearby_alias_radius_validation(client):
+    for r in [0, -5]:
+        res = client.get(f"/pois/nearby/search?lat={GATE[0]}&lon={GATE[1]}&radius_m={r}")
+        assert res.status_code == 422, f"Expected 422 for radius_m={r}, got {res.status_code}"
+
+
+def test_nearby_boundary_exact_and_sub_half_meter(client):
+    from events_core import haversine_m
+    search_pt = (10.788, 106.706)
+    d = haversine_m(search_pt[0], search_pt[1], GATE[0], GATE[1])
+
+    # Bán kính = d: tcv-001 có trong kết quả (cả 2 route)
+    res_nearby = client.get(f"/pois/nearby?lat={search_pt[0]}&lon={search_pt[1]}&search_radius_m={d}")
+    assert res_nearby.status_code == 200
+    assert "tcv-001" in [p["id"] for p in res_nearby.json()["pois"]]
+
+    res_alias = client.get(f"/pois/nearby/search?lat={search_pt[0]}&lon={search_pt[1]}&radius_m={d}")
+    assert res_alias.status_code == 200
+    assert "tcv-001" in [p["id"] for p in res_alias.json()["pois"]]
+
+    # Bán kính = d - 0.5: tcv-001 không có trong kết quả
+    res_nearby_less = client.get(f"/pois/nearby?lat={search_pt[0]}&lon={search_pt[1]}&search_radius_m={d - 0.5}")
+    assert res_nearby_less.status_code == 200
+    assert "tcv-001" not in [p["id"] for p in res_nearby_less.json()["pois"]]
+
+    res_alias_less = client.get(f"/pois/nearby/search?lat={search_pt[0]}&lon={search_pt[1]}&radius_m={d - 0.5}")
+    assert res_alias_less.status_code == 200
+    assert "tcv-001" not in [p["id"] for p in res_alias_less.json()["pois"]]
+
+
+def test_haversine_accuracy_precision():
+    from events_core import haversine_m
+    d = haversine_m(10, 106, 10.001, 106)
+    assert 111.19 - 0.05 <= d <= 111.19 + 0.05
+
+
+def test_nearby_skips_corrupted_poi_without_exception(client):
+    store = main.get_store()
+    corrupt_poi = {
+        "id": "corrupt-poi",
+        "category": "tien_ich",
+        "lat": "not_a_float",
+        "lon": None,
+        "radius_m": 20,
+        "translations": {"vi": {"name": "Lỗi", "description": "Lỗi"}},
+    }
+    store.docs["corrupt-poi"] = corrupt_poi
+    res = client.get(f"/pois/nearby?lat={GATE[0]}&lon={GATE[1]}&search_radius_m=300")
+    assert res.status_code == 200
+    ids = [p["id"] for p in res.json()["pois"]]
+    assert "corrupt-poi" not in ids
+    assert "tcv-001" in ids
+
+
 # ---------- Quyền CRUD ----------
 
 def test_write_endpoints_without_token_are_401(client):
@@ -333,3 +402,96 @@ def test_admin_delete_poi_cleans_up_audio(client):
 def test_delete_not_found(client):
     assert client.delete("/pois/khong-co", headers=admin()).status_code == 404
     assert client.audio_calls["delete"] == []
+
+
+def test_nearby_max_search_radius_100000(client):
+    # 100000 -> 200 và trả về mọi POI (PRD UC02 quy định 'Tất cả' = 100.000m)
+    r1 = client.get(f"/pois/nearby?lat={GATE[0]}&lon={GATE[1]}&search_radius_m=100000")
+    assert r1.status_code == 200
+    all_pois = client.get("/pois").json()["pois"]
+    assert len(r1.json()["pois"]) == len(all_pois)
+
+    # alias route cũng nhận 100000
+    r1_alias = client.get(f"/pois/nearby/search?lat={GATE[0]}&lon={GATE[1]}&radius_m=100000")
+    assert r1_alias.status_code == 200
+    assert len(r1_alias.json()["pois"]) == len(all_pois)
+
+    # 100001 -> 422
+    assert client.get(f"/pois/nearby?lat={GATE[0]}&lon={GATE[1]}&search_radius_m=100001").status_code == 422
+    assert client.get(f"/pois/nearby/search?lat={GATE[0]}&lon={GATE[1]}&radius_m=100001").status_code == 422
+
+    # 0, âm, NaN, inf -> 422
+    for bad in ["0", "-1", "-100", "nan", "inf"]:
+        assert client.get(f"/pois/nearby?lat={GATE[0]}&lon={GATE[1]}&search_radius_m={bad}").status_code == 422
+        assert client.get(f"/pois/nearby/search?lat={GATE[0]}&lon={GATE[1]}&radius_m={bad}").status_code == 422
+
+
+def test_nearby_poi_missing_radius_m_defaults_to_30(client):
+    store = main.get_store()
+    poi_no_rad = {
+        "id": "poi-no-radius",
+        "category": "dong_vat",
+        "lat": GATE[0],
+        "lon": GATE[1],
+        "translations": {"vi": {"name": "Không radius", "description": "Mặc định 30m"}},
+    }
+    store.docs["poi-no-radius"] = poi_no_rad
+
+    # Tìm kiếm cách đó ~11m -> within_poi_radius phải là True (11 <= 30)
+    lat_10m = GATE[0] + 0.0001
+    res = client.get(f"/pois/nearby?lat={lat_10m}&lon={GATE[1]}&search_radius_m=50")
+    assert res.status_code == 200
+    p = next((x for x in res.json()["pois"] if x["id"] == "poi-no-radius"), None)
+    assert p is not None
+    assert p["within_poi_radius"] is True
+
+    # Tìm kiếm cách đó ~39m -> within_poi_radius phải là False (39 > 30)
+    lat_35m = GATE[0] + 0.00035
+    res2 = client.get(f"/pois/nearby?lat={lat_35m}&lon={GATE[1]}&search_radius_m=50")
+    assert res2.status_code == 200
+    p2 = next((x for x in res2.json()["pois"] if x["id"] == "poi-no-radius"), None)
+    assert p2 is not None
+    assert p2["within_poi_radius"] is False
+
+    # POI có radius_m <= 0 hoặc không phải số thì bị bỏ qua và log warning
+    store.docs["poi-zero-rad"] = {
+        "id": "poi-zero-rad",
+        "category": "dong_vat",
+        "lat": GATE[0],
+        "lon": GATE[1],
+        "radius_m": 0,
+        "translations": {"vi": {"name": "Zero radius", "description": "Bị bỏ qua"}},
+    }
+    res3 = client.get(f"/pois/nearby?lat={GATE[0]}&lon={GATE[1]}&search_radius_m=50")
+    ids = [x["id"] for x in res3.json()["pois"]]
+    assert "poi-zero-rad" not in ids
+
+
+def test_poi_not_found_structured_error(client):
+    h = admin()
+
+    # GET /pois/{id}
+    r_get = client.get("/pois/khong-ton-tai")
+    assert r_get.status_code == 404
+    assert r_get.json()["detail"]["error"] == "poi_not_found"
+    assert "Không tìm thấy" in r_get.json()["detail"]["message"]
+
+    # GET /pois/{id}/audio-status
+    r_audio = client.get("/pois/khong-ton-tai/audio-status", headers=h)
+    assert r_audio.status_code == 404
+    assert r_audio.json()["detail"]["error"] == "poi_not_found"
+
+    # PUT /pois/{id}
+    r_put = client.put("/pois/khong-ton-tai", json={"name": "Test"}, headers=h)
+    assert r_put.status_code == 404
+    assert r_put.json()["detail"]["error"] == "poi_not_found"
+
+    # PATCH /pois/{id}/translations/{lang}
+    r_patch = client.patch("/pois/khong-ton-tai/translations/en", json={"name": "Test"}, headers=h)
+    assert r_patch.status_code == 404
+    assert r_patch.json()["detail"]["error"] == "poi_not_found"
+
+    # DELETE /pois/{id}
+    r_del = client.delete("/pois/khong-ton-tai", headers=h)
+    assert r_del.status_code == 404
+    assert r_del.json()["detail"]["error"] == "poi_not_found"

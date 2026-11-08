@@ -1,8 +1,3 @@
-"""
-Test API giai đoạn 4: POST /events (ticket_token), /events + /stats/* (admin).
-Chạy: pytest test_events_api.py -v   (TESTING=1: store trong bộ nhớ, không cần MongoDB)
-Đồng hồ máy chủ được thay bằng đồng hồ giả để kiểm tra ranh giới N phút.
-"""
 import os
 
 os.environ.setdefault("TESTING", "1")
@@ -138,6 +133,41 @@ def test_duplicate_burst_returns_200_and_stores_once(api):
     api.clock.advance(seconds=30)  # đúng EVENT_DEDUPE_SECONDS mặc định
     assert post(api).status_code == 201
     assert len(main.event_store.docs) == 2
+
+
+def test_enter_exit_enter_rapid_succession_api(api):
+    # enter -> exit -> enter nhanh đều được ghi nhận đủ (201) vì sự kiện liền kề khác loại
+    r1 = post(api, type="enter")
+    assert r1.status_code == 201
+    assert r1.json()["deduplicated"] is False
+
+    r2 = post(api, type="exit")
+    assert r2.status_code == 201
+    assert r2.json()["deduplicated"] is False
+
+    r3 = post(api, type="enter")
+    assert r3.status_code == 201
+    assert r3.json()["deduplicated"] is False
+    assert len(main.event_store.docs) == 3
+
+
+def test_concurrent_identical_events_api(api):
+    import asyncio
+    async def _concurrent():
+        return await asyncio.gather(*[
+            main.ingestor.record(
+                ticket_id="t_conc",
+                poi={"id": "tcv-001", "lat": GATE[0], "lon": GATE[1], "radius_m": 30},
+                event_type="listen",
+            )
+            for _ in range(5)
+        ])
+
+    res = asyncio.run(_concurrent())
+    is_new = [r for r, dup in res if not dup]
+    is_dup = [r for r, dup in res if dup]
+    assert len(is_new) == 1
+    assert len(is_dup) == 4
 
 
 def test_rate_limit_returns_429_with_retry_after(api, monkeypatch):

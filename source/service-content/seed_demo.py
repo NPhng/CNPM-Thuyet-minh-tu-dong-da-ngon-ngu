@@ -176,8 +176,8 @@ async def run_seed(args) -> None:
     from auth_client import HttpTicketStore
     from event_store import MongoEventStore
 
-    client = AsyncIOMotorClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"), tz_aware=True)
-    db = client[os.getenv("DB_NAME", "zoo")]
+    client = AsyncIOMotorClient(os.getenv("MONGO_URI", "mongodb://localhost:27019"), tz_aware=True)
+    db = client[os.getenv("DB_NAME", "zoo_content")]
     events, tickets = MongoEventStore(db), HttpTicketStore()
     try:
         await events.ensure_indexes()
