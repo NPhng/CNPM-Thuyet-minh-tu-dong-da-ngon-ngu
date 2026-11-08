@@ -46,8 +46,8 @@ from tickets import (
     vn_day_bounds,
 )
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "zoo")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27018")
+DB_NAME = os.getenv("DB_NAME", "zoo_auth")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 COUNTER_SEED_USERNAME = os.getenv("COUNTER_USERNAME", "counter01")
@@ -77,7 +77,10 @@ db_client: Optional[AsyncIOMotorClient] = None
 
 def get_db():
     if db_client is None:
-        raise HTTPException(status_code=503, detail="Chưa kết nối cơ sở dữ liệu")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "service_unavailable", "message": "Chưa kết nối cơ sở dữ liệu"},
+        )
     return db_client[DB_NAME]
 
 

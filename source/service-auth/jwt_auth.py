@@ -9,6 +9,7 @@ Role hợp lệ: counter, admin. Không có visitor/tourist/manager.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import os
 import time
 from typing import Optional
@@ -75,12 +76,21 @@ def decode_ticket_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Vé đã hết hạn")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "ticket_expired", "message": "Vé đã hết hạn"},
+        )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Token vé không hợp lệ")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "invalid_ticket_token", "message": "Token vé không hợp lệ"},
+        )
 
     if payload.get("type") != "ticket":
-        raise HTTPException(status_code=401, detail="Token không phải ticket token")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "not_ticket_token", "message": "Token không phải ticket token"},
+        )
     return payload
 
 
@@ -125,7 +135,10 @@ async def get_ticket_payload(
     if credentials is None:
         raise HTTPException(
             status_code=401,
-            detail="Cần vé hợp lệ. Gửi kèm Authorization: Bearer <ticket_token>",
+            detail={
+                "error": "ticket_token_required",
+                "message": "Cần vé hợp lệ. Gửi kèm Authorization: Bearer <ticket_token>",
+            },
         )
     return decode_ticket_token(credentials.credentials)
 
@@ -153,7 +166,10 @@ async def require_valid_ticket(payload: dict = Depends(get_ticket_payload)) -> d
     Trả về {ticket, payload}.
     """
     if _ticket_lookup is None:
-        raise HTTPException(status_code=503, detail="Chưa cấu hình kiểm tra vé")
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "service_unavailable", "message": "Chưa cấu hình kiểm tra vé"},
+        )
     ticket_id = payload.get("ticket_id") or payload.get("sub")
     now = time.time()
     cached = _ticket_cache.get(ticket_id)
@@ -163,7 +179,24 @@ async def require_valid_ticket(payload: dict = Depends(get_ticket_payload)) -> d
         ticket = await _ticket_lookup(ticket_id)
         _ticket_cache[ticket_id] = (now, ticket)
     if not ticket:
-        raise HTTPException(status_code=401, detail="Vé không tồn tại")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "ticket_not_found", "message": "Vé không tồn tại"},
+        )
+    expires_at = ticket.get("expires_at")
+    if expires_at:
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if datetime.now(timezone.utc) >= expires_at.astimezone(timezone.utc):
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "ticket_expired", "message": "Vé đã hết hạn"},
+            )
     if int(ticket.get("token_version", 0)) != int(payload.get("token_version", 0)):
-        raise HTTPException(status_code=401, detail="Token vé đã bị thay thế (đổi máy)")
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "token_superseded", "message": "Token vé đã bị thay thế (đổi máy)"},
+        )
     return {"ticket": ticket, "payload": payload}

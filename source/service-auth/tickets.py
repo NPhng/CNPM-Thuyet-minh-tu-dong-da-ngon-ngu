@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from collections import defaultdict, deque
@@ -15,6 +16,8 @@ import uuid
 from fastapi import HTTPException, Request
 
 from jwt_auth import JWT_ALGORITHM, JWT_SECRET, invalidate_ticket_cache
+
+logger = logging.getLogger(__name__)
 
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost").rstrip("/")
@@ -50,12 +53,18 @@ def compute_expires_at(created_at: datetime) -> datetime:
     if ttl in {"end_of_day", "eod", "same_day"}:
         return local.replace(hour=23, minute=59, second=59, microsecond=0)
     seconds = None
-    if ttl.endswith("h"):
-        seconds = int(float(ttl[:-1]) * 3600)
-    elif ttl.endswith("s"):
-        seconds = int(float(ttl[:-1]))
-    elif ttl.isdigit():
-        seconds = int(ttl)
+    try:
+        if ttl.endswith("h"):
+            seconds = int(float(ttl[:-1]) * 3600)
+        elif ttl.endswith("s"):
+            seconds = int(float(ttl[:-1]))
+        elif ttl.isdigit():
+            seconds = int(ttl)
+        else:
+            logger.warning("Cấu hình TICKET_TTL không nhận dạng được: %r, mặc định về end_of_day", TICKET_TTL)
+    except (ValueError, TypeError):
+        logger.warning("Cấu hình TICKET_TTL không hợp lệ: %r, mặc định về end_of_day", TICKET_TTL)
+        seconds = None
     if seconds is None:
         return local.replace(hour=23, minute=59, second=59, microsecond=0)
     return local + timedelta(seconds=seconds)
@@ -71,7 +80,7 @@ def ticket_status(ticket: dict, at: Optional[datetime] = None) -> str:
     expires = ticket["expires_at"]
     if expires.tzinfo is None:
         expires = expires.replace(tzinfo=timezone.utc)
-    if at.astimezone(VN_TZ) > expires.astimezone(VN_TZ):
+    if at.astimezone(VN_TZ) >= expires.astimezone(VN_TZ):
         return "expired"
     if ticket.get("device_id"):
         return "activated"
@@ -173,17 +182,37 @@ async def activate_ticket(db, code: str, device_id: str, confirm_device_switch: 
 
     now = now_vn()
     if not bound:
-        version = 1
-        await db["tickets"].update_one(
-            {"id": ticket["id"]},
-            {"$set": {"device_id": device_id, "activated_at": now, "token_version": version}},
+        res = await db["tickets"].update_one(
+            {"id": ticket["id"], "device_id": None},
+            {"$set": {"device_id": device_id, "activated_at": now, "token_version": 1}},
         )
+        if res.matched_count == 0:
+            fresh = await db["tickets"].find_one({"id": ticket["id"]})
+            if fresh and fresh.get("device_id") == device_id:
+                ticket = fresh
+            else:
+                ticket_error(
+                    409,
+                    "used_on_other_device",
+                    "Vé đã kích hoạt trên máy khác. Gửi lại với confirm_device_switch=true để chuyển máy.",
+                    confirm_required=True,
+                )
     elif bound != device_id:
-        version = version + 1
-        await db["tickets"].update_one(
-            {"id": ticket["id"]},
-            {"$set": {"device_id": device_id, "activated_at": now, "token_version": version}},
+        res = await db["tickets"].update_one(
+            {"id": ticket["id"], "token_version": version},
+            {"$set": {"device_id": device_id, "activated_at": now, "token_version": version + 1}},
         )
+        if res.matched_count == 0:
+            fresh = await db["tickets"].find_one({"id": ticket["id"]})
+            if fresh and fresh.get("device_id") == device_id:
+                ticket = fresh
+            else:
+                ticket_error(
+                    409,
+                    "used_on_other_device",
+                    "Vé đã kích hoạt trên máy khác. Gửi lại với confirm_device_switch=true để chuyển máy.",
+                    confirm_required=True,
+                )
     else:
         await db["tickets"].update_one(
             {"id": ticket["id"]},
@@ -211,7 +240,7 @@ async def create_ticket_doc(db, created_by: str) -> dict:
         if not await db["tickets"].find_one({"code": code}):
             break
     else:
-        raise HTTPException(status_code=500, detail="Không tạo được mã vé duy nhất")
+        ticket_error(500, "code_generation_failed", "Không tạo được mã vé duy nhất")
 
     ticket = {
         "id": str(uuid.uuid4()),

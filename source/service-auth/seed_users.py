@@ -9,8 +9,8 @@ import main as auth_main
 
 
 async def main():
-    client = AsyncIOMotorClient(os.getenv("MONGO_URI", "mongodb://localhost:27017"))
-    db = client[os.getenv("DB_NAME", "zoo")]
+    client = AsyncIOMotorClient(os.getenv("MONGO_URI", "mongodb://localhost:27018"))
+    db = client[os.getenv("DB_NAME", "zoo_auth")]
     await db["users"].create_index("username", unique=True)
     await auth_main.seed_users(db)
     print("Seed users xong (admin + counter01 nếu chưa có).")
