@@ -6,36 +6,39 @@ import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import {Leaf,Ticket,MapPin,Search,LocateFixed,Headphones,LockKeyhole,LogOut,LayoutDashboard,PawPrint,Users,Plus,RefreshCw,Trash2,Edit3,Copy,CheckCircle,AlertCircle,Menu,Volume2,Camera,X} from 'lucide-react';
-import {authApi,contentApi,audioApi,ApiError} from './api/client'; import {languages,labels,Lang,T,catName} from './i18n';
+import {authApi,contentApi,audioApi,ApiError} from './api/client'; import {languages,labels,Lang,T,catName,LOCALES,errorText} from './i18n';
 import { Html5Qrcode } from 'html5-qrcode';
-import {useLang} from './useLang';
+import {useLang,getLang} from './useLang';
 type POI={id:string;name?:string;lat:number;lon:number;radius_m?:number;category:string;species_name?:string;image_url?:string;translations?:Record<string,{name?:string;description?:string}>;description?:string;distance_m?:number};
 const cats=[['','Tất cả'],['thu_an_thit','Thú ăn thịt'],['thu_an_co','Thú ăn cỏ'],['chim','Chim'],['bo_sat_luong_cu','Bò sát & lưỡng cư'],['linh_truong','Linh trưởng'],['tien_ich','Tiện ích']];
 const TILE=import.meta.env.VITE_TILE_URL||'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-function deviceId(){let id=localStorage.getItem('zoo_device_id');if(!id){id=crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;localStorage.setItem('zoo_device_id',id)}return id}
+function safeGet(key: string): string | null { try { return localStorage.getItem(key); } catch { return null; } }
+function safeSet(key: string, val: string): void { try { localStorage.setItem(key, val); } catch {} }
+function safeRemove(key: string): void { try { localStorage.removeItem(key); } catch {} }
+function safeSessionGet(key: string): string | null { try { return sessionStorage.getItem(key); } catch { return null; } }
+function safeSessionSet(key: string, val: string): void { try { sessionStorage.setItem(key, val); } catch {} }
+function safeSessionRemove(key: string): void { try { sessionStorage.removeItem(key); } catch {} }
+function deviceId(){let id=safeGet('zoo_device_id');if(!id){id=crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;safeSet('zoo_device_id',id)}return id}
 
 function useTicket() {
   const [token, setToken] = useState(
-    localStorage.getItem('ticket_token') || ''
+    safeGet('ticket_token') || ''
   );
   const [expiry, setExpiry] = useState(
-    localStorage.getItem('ticket_expires_at') || ''
+    safeGet('ticket_expires_at') || ''
   );
   const [notice, setNotice] = useState('');
 
   const clear = useCallback(() => {
-    localStorage.removeItem('ticket_token');
-    localStorage.removeItem('ticket_expires_at');
+    safeRemove('ticket_token');
+    safeRemove('ticket_expires_at');
     setToken('');
     setExpiry('');
   }, []);
 
   const expire = useCallback((msg?: string) => {
     clear();
-    setNotice(
-      msg ||
-      'Vé không còn hiệu lực hoặc đã được chuyển sang thiết bị khác. Vui lòng nhập lại mã vé.'
-    );
+    setNotice(msg || 'ticketRevoked');
   }, [clear]);
 
   const handleError = useCallback((e: unknown) => {
@@ -53,9 +56,18 @@ function useTicket() {
     if (token && !valid) clear();
   }, [token, valid, clear]);
 
+  // Lệnh 3: auto-expire khi đến hạn vé phía client
+  useEffect(() => {
+    if (!expiry) return;
+    const ms = new Date(expiry).getTime() - Date.now();
+    if (ms <= 0) { expire('ticketExpired'); return; }
+    const tid = setTimeout(() => expire('ticketExpired'), ms);
+    return () => clearTimeout(tid);
+  }, [expiry, expire]);
+
   const save = (t: string, e?: string) => {
-    localStorage.setItem('ticket_token', t);
-    if (e) localStorage.setItem('ticket_expires_at', e);
+    safeSet('ticket_token', t);
+    if (e) safeSet('ticket_expires_at', e); else safeRemove('ticket_expires_at');
     setToken(t);
     setExpiry(e || '');
     setNotice('');
@@ -73,9 +85,9 @@ function useTicket() {
     dismissNotice: () => setNotice('')
   };
 }
-function useStaff(){const [token,setToken]=useState(sessionStorage.getItem('staff_token')||'');const [user,setUser]=useState<any>(()=>{try{return JSON.parse(sessionStorage.getItem('staff_user')||'null')}catch{return null}});const login=(t:string,u:any)=>{sessionStorage.setItem('staff_token',t);sessionStorage.setItem('staff_user',JSON.stringify(u));setToken(t);setUser(u)};const logout=()=>{sessionStorage.removeItem('staff_token');sessionStorage.removeItem('staff_user');setToken('');setUser(null)};return {token,user,login,logout};}
-function fmtDate(v?:string){if(!v)return '—';const d=new Date(v);return isNaN(+d)?v:d.toLocaleString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'})}
-function errorText(e:any){if(e instanceof ApiError){if(e.status===401)return 'Phiên đăng nhập hoặc vé không còn hiệu lực.';if(e.status===403)return 'Bạn không có quyền thực hiện thao tác này.';return e.message}return e?.message||'Đã xảy ra lỗi. Vui lòng thử lại.'}
+function useStaff(){const [token,setToken]=useState(safeSessionGet('staff_token')||'');const [user,setUser]=useState<any>(()=>{try{return JSON.parse(safeSessionGet('staff_user')||'null')}catch{return null}});const login=(t:string,u:any)=>{safeSessionSet('staff_token',t);safeSessionSet('staff_user',JSON.stringify(u));setToken(t);setUser(u)};const logout=()=>{safeSessionRemove('staff_token');safeSessionRemove('staff_user');setToken('');setUser(null)};return {token,user,login,logout};}
+function fmtDate(v?:string,lang:Lang=getLang()){if(!v)return '—';const d=new Date(v);return isNaN(+d)?v:d.toLocaleString(LOCALES[lang],{timeZone:'Asia/Ho_Chi_Minh'})}
+// errorText moved to i18n.ts
 function qrWarning(url: string) {
   try {
     const host = new URL(url).hostname;
@@ -96,10 +108,10 @@ function qrWarning(url: string) {
 }
 // Vite đổi tên file ảnh của Leaflet nên icon mặc định bị vỡ; khai báo icon tường minh.
 const zooMarkerIcon=L.icon({iconUrl:markerIcon,iconRetinaUrl:markerIcon2x,shadowUrl:markerShadow,iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],tooltipAnchor:[16,-28],shadowSize:[41,41]});
-function IconMarker({category}:{category:string}){return <span className="marker">{category==='chim'?'🐦':category==='thu_an_thit'?'🦁':category==='thu_an_co'?'🦒':category==='linh_truong'?'🐒':category==='bo_sat_luong_cuong'?'🐢':'🌿'}</span>}
+function IconMarker({category}:{category:string}){return <span className="marker">{category==='chim'?'🐦':category==='thu_an_thit'?'🦁':category==='thu_an_co'?'🦒':category==='linh_truong'?'🐒':category==='bo_sat_luong_cu'?'🐢':'🌿'}</span>}
 function MapClick({onPick}:{onPick:(lat:number,lon:number)=>void}){useMapEvents({click(e){onPick(e.latlng.lat,e.latlng.lng)}});return null}
-const poiName=(p:POI,l:Lang)=>p.translations?.[l]?.name||p.translations?.vi?.name||p.name||p.id;
-const poiDesc=(p:POI,l:Lang)=>p.translations?.[l]?.description||p.translations?.vi?.description||p.species_name||'';
+const poiName=(p:POI,l:Lang)=>p.translations?.[l]?.name||p.translations?.en?.name||p.translations?.vi?.name||p.name||p.id;
+const poiDesc=(p:POI,l:Lang)=>p.translations?.[l]?.description||p.translations?.en?.description||p.translations?.vi?.description||p.description||p.species_name||'';
 const distanceM=(a:[number,number],b:[number,number])=>{const R=6371000,r=(x:number)=>x*Math.PI/180,dLat=r(b[0]-a[0]),dLon=r(b[1]-a[1]);const h=Math.sin(dLat/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
 function FlyTo({target}:{target?:[number,number]|null}){const map=useMap();useEffect(()=>{if(target)map.flyTo(target,17)},[target?.[0],target?.[1],map]);return null}
 function MapView({pois,position,onPick,manual,focus}:{pois:POI[];position?:[number,number]|null;onPick?:(lat:number,lon:number)=>void;manual?:boolean;focus?:[number,number]|null}){const [lang]=useLang();const center: [number,number]=position||[10.78755,106.70528];return <MapContainer center={center} zoom={16} scrollWheelZoom className="map"><TileLayer attribution='&copy; OpenStreetMap contributors' url={TILE}/><FlyTo target={focus}/>{pois.map(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon)?<span key={p.id}><Marker icon={zooMarkerIcon} position={[p.lat,p.lon]}><Popup><b>{poiName(p,lang)}</b><br/><Link to={`/poi/${p.id}`}>{T('viewDetail',lang)}</Link></Popup></Marker>{p.radius_m?<Circle center={[p.lat,p.lon]} radius={p.radius_m} pathOptions={{color:'#16a34a',fillOpacity:.08}}/>:null}</span>:null)}{position&&<Circle center={position} radius={manual?12:8} pathOptions={manual?{color:'#f59e0b',fillColor:'#fbbf24',fillOpacity:1}:{color:'#2563eb',fillColor:'#3b82f6',fillOpacity:1}}>{manual&&<LeafletTooltip permanent direction="top">{T('yourPos',lang)}</LeafletTooltip>}</Circle>}{onPick&&<MapClick onPick={onPick}/>}</MapContainer>}
@@ -116,7 +128,7 @@ function useTicketModal(ticket:ReturnType<typeof useTicket>){
       try{setInfo(await authApi.meTicket(ticket.token))}
       catch(e) {
           if (!ticket.handleError(e)) {
-            setInfo({ error: errorText(e) });
+            setInfo({ error: errorText(e, getLang()) });
           }
         }
     }
@@ -125,7 +137,7 @@ function useTicketModal(ticket:ReturnType<typeof useTicket>){
     if(ticket.valid)void openTicket();
     else nav('/activate');
   };
-  const ticketModal=open&&<div className="modal-backdrop" onClick={()=>setOpen(false)}><section className="modal" onClick={e=>e.stopPropagation()}><button className="close" onClick={()=>setOpen(false)}>×</button><span className="eyebrow">{T('ticketEyebrow',lang)}</span><h2>{labels[lang].myTicket}</h2>{ticket.valid?<><div className="notice success"><CheckCircle/> {T('ticketOk',lang)}</div><p>{T('expires',lang)} <b>{fmtDate(ticket.expiry)}</b></p>{info?.error&&<p className="muted">{info.error}</p>}</>:<div className="notice warn"><Ticket/> {T('ticketNone',lang)}</div>}
+  const ticketModal=open&&<div className="modal-backdrop" onClick={()=>setOpen(false)}><section className="modal" onClick={e=>e.stopPropagation()}><button className="close" aria-label={T('close',lang)} onClick={()=>setOpen(false)}>×</button><span className="eyebrow">{T('ticketEyebrow',lang)}</span><h2>{labels[lang].myTicket}</h2>{ticket.valid?<><div className="notice success"><CheckCircle/> {T('ticketOk',lang)}</div><p>{T('expires',lang)} <b>{fmtDate(ticket.expiry,lang)}</b></p>{info?.error&&<p className="muted">{info.error}</p>}</>:<div className="notice warn"><Ticket/> {T('ticketNone',lang)}</div>}
     <Link
       className="btn btn-primary full"
       to="/activate"
@@ -157,7 +169,7 @@ function useTicketModal(ticket:ReturnType<typeof useTicket>){
 function GuestHome({ticket}:{ticket:ReturnType<typeof useTicket>}){
  const [lang]=useLang();
  const {openTicket,onHeaderTicket,ticketModal}=useTicketModal(ticket);const [pois,setPois]=useState<POI[]>([]),[loading,setLoading]=useState(true),[err,setErr]=useState(''),[query,setQuery]=useState(''),[tab,setTab]=useState<'map'|'list'>('map'),[gpsPos,setGpsPos]=useState<[number,number]|null>(null),[gpsFailed,setGpsFailed]=useState(false),[manualId,setManualId]=useState(''),[destId,setDestId]=useState(''),[gpsMsg,setGpsMsg]=useState(''),[radius,setRadius]=useState('300'),[nearby,setNearby]=useState<POI[]|null>(null);
- const load=useCallback(async()=>{setLoading(true);setErr('');try{const d:any=await contentApi.pois();setPois(d.pois||[])}catch(e){setErr(errorText(e))}finally{setLoading(false)}},[]);
+ const load=useCallback(async()=>{setLoading(true);setErr('');try{const d:any=await contentApi.pois();setPois(d.pois||[])}catch(e){setErr(errorText(e, getLang()))}finally{setLoading(false)}},[lang]);
  useEffect(()=>{load()},[load]);useEffect(()=>{if(!navigator.geolocation){setGpsFailed(true);setGpsMsg('gpsUnsupported');return}const id=navigator.geolocation.watchPosition(p=>{setGpsPos([p.coords.latitude,p.coords.longitude]);setGpsFailed(false);setManualId('');setGpsMsg('gpsOk')},()=>{setGpsFailed(true);setGpsMsg('gpsFail')},{enableHighAccuracy:true,maximumAge:10000});return()=>navigator.geolocation.clearWatch(id)},[]);
  const filtered=useMemo(()=>pois.filter(p=>{const n=(poiName(p,lang)).toLowerCase();return n.includes(query.toLowerCase())}),[pois,query,lang]);
  const spotOptions=useMemo(()=>[...pois].sort((a,b)=>a.id==='tcv-001'?-1:b.id==='tcv-001'?1:(a.translations?.vi?.name||a.name||'').localeCompare(b.translations?.vi?.name||b.name||'','vi')),[pois,lang]);
@@ -166,10 +178,10 @@ function GuestHome({ticket}:{ticket:ReturnType<typeof useTicket>}){
  // Vị trí chọn tay chỉ sống trong GuestHome: không lưu localStorage/URL và PoiDetail không đọc được, nên không gửi enter/exit.
  const pos=gpsPos||manualPos,usingManual=!gpsPos&&!!manualPos;
  const dest=pois.find(p=>p.id===destId);
- const findNearby=async()=>{if(!pos){setGpsMsg('gpsNeed');return}try{const d:any=await contentApi.nearby(pos[0],pos[1],radius==='all'?100000:Number(radius));setNearby(d.pois||[]);setTab('list')}catch(e){setErr(errorText(e))}};
+ const findNearby=async()=>{if(!pos){setGpsMsg('gpsNeed');return}try{const d:any=await contentApi.nearby(pos[0],pos[1],radius==='all'?100000:Number(radius));setNearby((d.pois||[]).map((n:POI)=>({...pois.find((x:POI)=>x.id===n.id),...n,translations:n.translations||pois.find((x:POI)=>x.id===n.id)?.translations})));setTab('list')}catch(e){setErr(errorText(e, getLang()))}};
  
- return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/><main className="guest-wrap"><section className="hero"><div className="hero-copy"><span className="eyebrow"><Leaf size={15}/> {T('eyebrow',lang)}</span><h1>{labels[lang].heroTitle1}<br/><em>{labels[lang].heroTitle2}</em></h1><p>{labels[lang].heroDesc}</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>{setTab('list');document.getElementById('explore')?.scrollIntoView({behavior:'smooth'})}}>{labels[lang].explore} <MapPin size={17}/></button><button className="btn btn-outline" onClick={()=>void openTicket()}><Ticket size={17}/> {labels[lang].myTicket}</button></div></div><div className="hero-art"><span>🌿</span><div className="hero-animal">🦒</div><span>🍃</span></div></section><section className="info-grid"><article className="info-card"><span className="info-icon">☀️</span><div><b>{T('openHours',lang)}</b><p>{T('openHoursNote',lang)}</p></div></article><article className="info-card"><span className="info-icon">📍</span><div><b>{T('address',lang)}</b><p>2 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM</p></div></article><article className="info-card"><span className="info-icon">🌱</span><div><b>{T('about',lang)}</b><p>{T('aboutNote',lang)}</p></div></article></section><section id="explore" className="explore"><div className="section-heading"><div><span className="eyebrow">{T('mapEyebrow',lang)}</span><h2>{T('whereNext',lang)}</h2><p>{T('whereNextDesc',lang)}</p></div><div className="locate-actions">{(gpsFailed||manualId)&&<select aria-label="Tôi đang ở" value={manualId} onChange={e=>setManualId(e.target.value)}><option value="">{T('iAmAt',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select>}<button className="btn btn-outline" onClick={()=>void findNearby()}><LocateFixed size={17}/> {labels[lang].nearMe}</button></div></div><div className="search-row"><div className="searchbox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={labels[lang].searchPh}/></div><select aria-label="Chọn điểm đến" value={destId} onChange={e=>{setDestId(e.target.value);setTab('map')}}><option value="">{T('chooseDest',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select><select aria-label="Bán kính tìm kiếm" value={radius} onChange={e=>setRadius(e.target.value)}><option value="100">{T('r100',lang)}</option><option value="300">{T('r300',lang)}</option><option value="500">{T('r500',lang)}</option><option value="all">{T('all',lang)}</option></select></div>{gpsMsg&&<p className="gps-note"><LocateFixed size={15}/>{T(gpsMsg,lang)}</p>}{usingManual&&<p className="gps-note"><MapPin size={15}/>{T('yourPos',lang)}: <b>{manualPoi?poiName(manualPoi,lang):''}</b>. {T('manualNote',lang)}</p>}{dest&&<><PoiCard poi={{...dest,distance_m:pos?distanceM(pos,[dest.lat,dest.lon]):undefined}}/>{!pos&&<p className="gps-note">{T('needGps',lang)}</p>}</>}<div className="tabs"><button className={tab==='map'?'active':''} onClick={()=>setTab('map')}>{T('tabMap',lang)}</button><button className={tab==='list'?'active':''} onClick={()=>setTab('list')}>{T('tabList',lang)} {nearby?`(${nearby.length})`:''}</button></div>{err&&<div className="notice error"><AlertCircle size={18}/>{err}<button onClick={()=>void load()}>{T('retry',lang)}</button></div>}{loading?<div className="skeleton large"/>:<div className="explore-content">{tab==='map'?<MapView pois={filtered} position={pos} manual={usingManual} focus={dest?[dest.lat,dest.lon]:null}/>:<div className="poi-list">{(nearby||filtered).filter(p=>!query||(poiName(p,lang)).toLowerCase().includes(query.toLowerCase())).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{tab==='map'&&<div className="poi-list map-list">{filtered.slice(0,5).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{!filtered.length&&<div className="empty"><PawPrint/><b>{T('noResults',lang)}</b><span>{T('noResultsHint',lang)}</span></div>}</div>}</section><footer>{T('footer',lang)}</footer></main>{ticketModal}</>}
-function PoiCard({poi:p}:{poi:POI}){const [lang]=useLang();return <Link className="poi-card" to={`/poi/${p.id}`}><div className="poi-thumb">{p.image_url?<img src={p.image_url} alt="" onError={e=>{e.currentTarget.style.display='none'}}/>:<span>{p.category==='chim'?'🐦':p.category==='thu_an_thit'?'🦁':p.category==='thu_an_co'?'🦒':'🌿'}</span>}</div><div className="poi-card-copy"><span className="category">{catName(p.category,lang)}</span><b>{poiName(p,lang)}</b><p>{poiDesc(p,lang)||T('exploreThis',lang)}</p>{p.distance_m!==undefined&&<small><MapPin size={13}/>{p.distance_m<1000?`${Math.round(p.distance_m)} m`:`${(p.distance_m/1000).toFixed(1)} km`}</small>}</div><span className="arrow">↗</span></Link>}
+ return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/><main className="guest-wrap"><section className="hero"><div className="hero-copy"><span className="eyebrow"><Leaf size={15}/> {T('eyebrow',lang)}</span><h1>{labels[lang].heroTitle1}<br/><em>{labels[lang].heroTitle2}</em></h1><p>{labels[lang].heroDesc}</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>{setTab('list');document.getElementById('explore')?.scrollIntoView({behavior:'smooth'})}}>{labels[lang].explore} <MapPin size={17}/></button><button className="btn btn-outline" onClick={()=>void openTicket()}><Ticket size={17}/> {labels[lang].myTicket}</button></div></div><div className="hero-art"><span>🌿</span><div className="hero-animal">🦒</div><span>🍃</span></div></section><section className="info-grid"><article className="info-card"><span className="info-icon">☀️</span><div><b>{T('openHours',lang)}</b><p>{T('openHoursNote',lang)}</p></div></article><article className="info-card"><span className="info-icon">📍</span><div><b>{T('address',lang)}</b><p>2 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM</p></div></article><article className="info-card"><span className="info-icon">🌱</span><div><b>{T('about',lang)}</b><p>{T('aboutNote',lang)}</p></div></article></section><section id="explore" className="explore"><div className="section-heading"><div><span className="eyebrow">{T('mapEyebrow',lang)}</span><h2>{T('whereNext',lang)}</h2><p>{T('whereNextDesc',lang)}</p></div><div className="locate-actions">{(gpsFailed||manualId)&&<select aria-label={T('ariaIAmAt',lang)} value={manualId} onChange={e=>setManualId(e.target.value)}><option value="">{T('iAmAt',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select>}<button className="btn btn-outline" onClick={()=>void findNearby()}><LocateFixed size={17}/> {labels[lang].nearMe}</button></div></div><div className="search-row"><div className="searchbox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={labels[lang].searchPh} aria-label={labels[lang].searchPh}/></div><select aria-label={T('ariaDest',lang)} value={destId} onChange={e=>{setDestId(e.target.value);setTab('map')}}><option value="">{T('chooseDest',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select><select aria-label={T('ariaRadius',lang)} value={radius} onChange={e=>setRadius(e.target.value)}><option value="100">{T('r100',lang)}</option><option value="300">{T('r300',lang)}</option><option value="500">{T('r500',lang)}</option><option value="all">{T('all',lang)}</option></select></div>{gpsMsg&&<p className="gps-note"><LocateFixed size={15}/>{T(gpsMsg,lang)}</p>}{usingManual&&<p className="gps-note"><MapPin size={15}/>{T('yourPos',lang)}: <b>{manualPoi?poiName(manualPoi,lang):''}</b>. {T('manualNote',lang)}</p>}{dest&&<><PoiCard poi={{...dest,distance_m:pos?distanceM(pos,[dest.lat,dest.lon]):undefined}}/>{!pos&&<p className="gps-note">{T('needGps',lang)}</p>}</>}<div className="tabs"><button className={tab==='map'?'active':''} onClick={()=>setTab('map')}>{T('tabMap',lang)}</button><button className={tab==='list'?'active':''} onClick={()=>setTab('list')}>{T('tabList',lang)} {nearby?`(${nearby.length})`:''}</button></div>{err&&<div className="notice error"><AlertCircle size={18}/>{err}<button onClick={()=>void load()}>{T('retry',lang)}</button></div>}{loading?<div className="skeleton large"/>:<div className="explore-content">{tab==='map'?<MapView pois={filtered} position={pos} manual={usingManual} focus={dest?[dest.lat,dest.lon]:null}/>:<div className="poi-list">{(nearby||filtered).filter(p=>!query||(poiName(p,lang)).toLowerCase().includes(query.toLowerCase())).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{tab==='map'&&<div className="poi-list map-list">{filtered.slice(0,5).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{!filtered.length&&<div className="empty"><PawPrint/><b>{T('noResults',lang)}</b><span>{T('noResultsHint',lang)}</span></div>}</div>}</section><footer>{T('footer',lang)}</footer></main>{ticketModal}</>}
+function PoiCard({poi:p}:{poi:POI}){const [lang]=useLang();return <Link className="poi-card" to={`/poi/${p.id}`}><div className="poi-thumb">{p.image_url?<img src={p.image_url} alt={poiName(p,lang)} onError={e=>{e.currentTarget.style.display='none'}}/>:<span>{p.category==='chim'?'🐦':p.category==='thu_an_thit'?'🦁':p.category==='thu_an_co'?'🦒':p.category==='bo_sat_luong_cu'?'🐢':'🌿'}</span>}</div><div className="poi-card-copy"><span className="category">{catName(p.category,lang)}</span><b>{poiName(p,lang)}</b><p>{poiDesc(p,lang)||T('exploreThis',lang)}</p>{p.distance_m!==undefined&&<small><MapPin size={13}/>{p.distance_m<1000?`${Math.round(p.distance_m)} m`:`${(p.distance_m/1000).toFixed(1)} km`}</small>}</div><span className="arrow">↗</span></Link>}
 function QrScanner({
   onDetected,
   onClose,
@@ -177,7 +189,8 @@ function QrScanner({
   onDetected: (text: string) => void;
   onClose: () => void;
 }) {
-  const [error, setError] = useState('');
+  const [lang] = useLang();
+  const [errorKey, setErrorKey] = useState('');
   const [starting, setStarting] = useState(true);
 
   useEffect(() => {
@@ -212,21 +225,19 @@ function QrScanner({
         /\bInstagram\b/i.test(ua);
 
       if (embeddedBrowser) {
-        setError(
-          'Bạn đang mở trang trong trình duyệt nhúng. Hãy mở bằng Safari hoặc Chrome, hoặc nhập mã vé thủ công.',
-        );
+        setErrorKey('scanErrEmbedded');
         setStarting(false);
         return;
       }
 
       if (!window.isSecureContext) {
-        setError('Camera cần HTTPS hoặc localhost. Hãy nhập mã vé thủ công.');
+        setErrorKey('scanErrHttps');
         setStarting(false);
         return;
       }
 
       if (!navigator.mediaDevices?.getUserMedia) {
-        setError('Trình duyệt không hỗ trợ camera. Hãy mở bằng Safari hoặc Chrome, hoặc nhập mã thủ công.');
+        setErrorKey('scanErrUnsupported');
         setStarting(false);
         return;
       }
@@ -254,9 +265,7 @@ function QrScanner({
         setStarting(false);
       } catch {
         if (!disposed) {
-          setError(
-            'Không mở được camera. Hãy cấp quyền camera, mở bằng Safari/Chrome hoặc nhập mã vé thủ công.',
-          );
+          setErrorKey('scanErrOpen');
           setStarting(false);
         }
         await stopScanner();
@@ -280,16 +289,16 @@ function QrScanner({
         onClick={(e) => e.stopPropagation()}
         style={{ width: 'min(100% - 24px, 480px)', maxHeight: '90dvh', overflowY: 'auto' }}
       >
-        <button type="button" className="close" aria-label="Đóng trình quét QR" onClick={onClose}>
+        <button type="button" className="close" aria-label={T('scanCloseAria', lang)} onClick={onClose}>
           <X />
         </button>
-        <h2 id="qr-scan-title">Quét mã QR trên vé</h2>
-        <p>Đưa mã QR vào giữa khung hình.</p>
+        <h2 id="qr-scan-title">{T('scanTitle', lang)}</h2>
+        <p>{T('scanHint', lang)}</p>
         <div id="activate-qr-reader" style={{ width: '100%', margin: '16px 0', overflow: 'hidden', borderRadius: 12 }} />
-        {starting && !error && <p>Đang khởi động camera…</p>}
-        {error && <div className="notice error" role="alert">{error}</div>}
+        {starting && !errorKey && <p>{T('scanStarting', lang)}</p>}
+        {errorKey && <div className="notice error" role="alert">{T(errorKey, lang)}</div>}
         <button type="button" className="btn btn-outline full" onClick={onClose}>
-          Đóng và nhập mã thủ công
+          {T('scanClose', lang)}
         </button>
       </section>
     </div>
@@ -318,7 +327,7 @@ function extractTicketCode(raw: string): string | null {
   return code;
 }
 function Activate({ticket}:{ticket:ReturnType<typeof useTicket>}){
- const {onHeaderTicket,ticketModal}=useTicketModal(ticket);const [params]=useSearchParams(),[code,setCode]=useState((params.get('code')||'').replace(/\s/g,'').toUpperCase()),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[confirm,setConfirm]=useState(false),[replaceAsk,setReplaceAsk]=useState(false),[success,setSuccess]=useState(false),[expiry,setExpiry]=useState('');const nav=useNavigate();
+ const [lang]=useLang();const {onHeaderTicket,ticketModal}=useTicketModal(ticket);const [params]=useSearchParams(),[code,setCode]=useState((params.get('code')||'').replace(/\s/g,'').toUpperCase()),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[confirm,setConfirm]=useState(false),[replaceAsk,setReplaceAsk]=useState(false),[success,setSuccess]=useState(false),[expiry,setExpiry]=useState('');const nav=useNavigate();
 const [scanOpen, setScanOpen] = useState(false);
 const [scanError, setScanError] = useState('');
 
@@ -326,10 +335,7 @@ const handleQrDetected = useCallback((raw: string) => {
   const extracted = extractTicketCode(raw);
 
   if (!extracted) {
-    setScanError(
-      'QR không hợp lệ hoặc không chứa mã kích hoạt. ' +
-      'Hãy thử lại hoặc nhập mã vé thủ công.',
-    );
+    setScanError('scanInvalid');
     setScanOpen(false);
     return;
   }
@@ -348,21 +354,20 @@ const submit = async (
     return;
   }
 
-  setBusy(true);setErr('');try{const d:any=await authApi.activate({code:code.replace(/\s/g,'').toUpperCase(),device_id:deviceId(),confirm_device_switch:switchDevice});ticket.save(d.ticket_token||d.token,d.expires_at);setExpiry(d.expires_at||'');setSuccess(true);setConfirm(false)}catch(e:any){if(e instanceof ApiError&&e.status===409&&(e.code==='used_on_other_device'||String(e.message).includes('confirm_required'))){setConfirm(true)}else if(e instanceof ApiError&&e.status===404) setErr('Mã vé không đúng');else if(e instanceof ApiError&&e.status===410)setErr('Vé đã hết hạn');else if(e instanceof ApiError&&e.status===429)setErr('Thử quá nhiều lần, vui lòng đợi ít phút');else setErr(errorText(e))}finally{setBusy(false)}};useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">← Về trang chủ</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>Kích hoạt thành công!</h1><p>Vé đã được liên kết với thiết bị này. Chúc bạn có chuyến tham quan vui vẻ.</p>{expiry&&<p>Hết hạn: <b>{fmtDate(expiry)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>Về trang chủ</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>Đi nghe thuyết minh</button></>:<><span className="eyebrow">MỞ KHÓA TRẢI NGHIỆM</span><h1>Kích hoạt vé tham quan</h1><p>Nhập mã trên vé của bạn để mở khóa thuyết minh âm thanh.</p><label htmlFor="ticket-code">Mã vé</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder="VD: TCV-ABC123" autoComplete="off"/><button type="button" className="btn btn-outline full" onClick={()=>{setScanError('');setScanOpen(true)}}><Camera size={17}/> Quét mã QR</button>{scanError&&<div className="notice error" role="alert"><AlertCircle/>{scanError}</div>}{err&&<div className="notice error"><AlertCircle/>{err}<button onClick={()=>void submit(false,true)}>Thử lại</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?'Đang kích hoạt…':'Kích hoạt vé'}</button><p className="fine-print"><LockKeyhole size={14}/> Vé chỉ có thể nghe trên một thiết bị tại một thời điểm.</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>Chuyển vé sang thiết bị này?</h2><p>Vé này đã dùng ở máy khác. Chuyển sang máy này? Máy cũ sẽ không nghe được nữa.</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>Hủy</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>Đồng ý chuyển</button></div></section></div>}
+  setBusy(true);setErr('');try{const d:any=await authApi.activate({code:code.replace(/\s/g,'').toUpperCase(),device_id:deviceId(),confirm_device_switch:switchDevice});ticket.save(d.ticket_token||d.token,d.expires_at);setExpiry(d.expires_at||'');setSuccess(true);setConfirm(false)}catch(e:any){if(e instanceof ApiError&&e.status===409&&(e.code==='used_on_other_device'||String(e.message).includes('confirm_required'))){setConfirm(true)}else if(e instanceof ApiError&&e.status===404)setErr('errTicketInvalid');else if(e instanceof ApiError&&e.status===410)setErr('errTicketExpired');else if(e instanceof ApiError&&e.status===429)setErr('errTooMany');else setErr(errorText(e, getLang()))}finally{setBusy(false)}};useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">{T('backHome',lang)}</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>{T('successTitle',lang)}</h1><p>{T('successDesc',lang)}</p>{expiry&&<p>{T('expires',lang)} <b>{fmtDate(expiry,lang)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>{T('goHome',lang)}</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>{T('goListen',lang)}</button></>:<><span className="eyebrow">{T('unlockEyebrow',lang)}</span><h1>{T('activateTitle',lang)}</h1><p>{T('activateDesc',lang)}</p><label htmlFor="ticket-code">{T('ticketCode',lang)}</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder={T('ticketCodePh',lang)} autoComplete="off"/><button type="button" className="btn btn-outline full" onClick={()=>{setScanError('');setScanOpen(true)}}><Camera size={17}/> {T('scanQr',lang)}</button>{scanError&&<div className="notice error" role="alert"><AlertCircle/>{T(scanError,lang)}</div>}{err&&<div className="notice error"><AlertCircle/>{T(err,lang)}<button onClick={()=>void submit(false,true)}>{T('retry',lang)}</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?T('activating',lang):labels[lang].activate}</button><p className="fine-print"><LockKeyhole size={14}/> {T('oneDeviceNote',lang)}</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>{T('switchTitle',lang)}</h2><p>{T('switchDesc',lang)}</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>{T('cancel',lang)}</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>{T('confirmSwitch',lang)}</button></div></section></div>}
 {replaceAsk && (
   <div className="modal-backdrop">
     <section className="modal">
-      <h2>Thay vé đang sử dụng?</h2>
+      <h2>{T('replaceTitle',lang)}</h2>
       <p>
-        Bạn đang có vé còn hạn đến {fmtDate(ticket.expiry)}.
-        Bạn có muốn thay bằng vé mới không?
+        {T('replaceDesc',lang).replace('{date}',fmtDate(ticket.expiry,lang))}
       </p>
       <div className="modal-actions">
         <button
           className="btn btn-outline"
           onClick={() => setReplaceAsk(false)}
         >
-          Hủy
+          {T('cancel',lang)}
         </button>
         <button
           className="btn btn-primary"
@@ -371,7 +376,7 @@ const submit = async (
             void submit(false, true);
           }}
         >
-          Đồng ý thay vé
+          {T('confirmReplace',lang)}
         </button>
       </div>
     </section>
@@ -379,29 +384,158 @@ const submit = async (
 )}
 {scanOpen && <QrScanner onDetected={handleQrDetected} onClose={() => setScanOpen(false)} />}
 </>}
-function AudioPlayer({id,lang,token,onUnauthorized,onListen}:{id:string;lang:Lang;token:string;onUnauthorized:()=>void;onListen:()=>void}){const [url,setUrl]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[playing,setPlaying]=useState(false),[progress,setProgress]=useState(0),[duration,setDuration]=useState(0);const ref=useRef<HTMLAudioElement>(null);const load=async()=>{setBusy(true);setErr('');try{const blob=await audioApi.visitor(id,lang,token);const next=URL.createObjectURL(blob);setUrl(old=>{if(old)URL.revokeObjectURL(old);return next});}catch(e:any){if (e instanceof ApiError && e.status === 401) {
+function AudioPlayer({id,lang,token,onUnauthorized,onListen}:{id:string;lang:Lang;token:string;onUnauthorized:()=>void;onListen:()=>void}){const [url,setUrl]=useState(''),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[playing,setPlaying]=useState(false),[progress,setProgress]=useState(0),[duration,setDuration]=useState(0);const ref=useRef<HTMLAudioElement>(null);const urlRef=useRef('');useEffect(()=>{let cancelled=false;const run=async()=>{setBusy(true);setErr('');try{const blob=await audioApi.visitor(id,lang,token);if(cancelled)return;const next=URL.createObjectURL(blob);if(urlRef.current)URL.revokeObjectURL(urlRef.current);urlRef.current=next;setUrl(next);}catch(e:any){if(cancelled)return;if (e instanceof ApiError && e.status === 401) {
   onUnauthorized();
-}else if(e instanceof ApiError&&e.status===502)setErr(T('audioErr502',lang));else setErr(errorText(e))}finally{setBusy(false)}};useEffect(()=>{void load();return()=>{if(url)URL.revokeObjectURL(url)}},[id,lang,token]);useEffect(()=>{if(playing)onListen()},[playing]);return <div className="audio-box"><div className="audio-icon"><Volume2/></div><div className="audio-main"><b>{T('audioTitle',lang)}</b><p>{busy?T('audioPreparing',lang):err||T('audioReady',lang)}</p>{url&&<audio ref={ref} src={url} controls onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onTimeUpdate={e=>setProgress(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)}/>}<div className="audio-meta">{duration?`${Math.floor(progress/60)}:${String(Math.floor(progress%60)).padStart(2,'0')} / ${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,'0')}`:T('audioHint',lang)}</div>{(busy||err)&&<button className="btn btn-outline" onClick={()=>void load()} disabled={busy}>{busy?T('loading',lang):T('retry',lang)}</button>}</div></div>}
+}else if(e instanceof ApiError&&e.status===502)setErr(T('audioErr502',lang));else setErr(errorText(e, getLang()))}finally{if(!cancelled)setBusy(false)}};void run();return()=>{cancelled=true;if(urlRef.current){URL.revokeObjectURL(urlRef.current);urlRef.current=''}};},[id,lang,token]);const reload=useCallback(()=>{if(urlRef.current){URL.revokeObjectURL(urlRef.current);urlRef.current=''}setUrl('');setBusy(true);setErr('');audioApi.visitor(id,lang,token).then(blob=>{const next=URL.createObjectURL(blob);urlRef.current=next;setUrl(next)}).catch((e:any)=>{if(e instanceof ApiError&&e.status===401){onUnauthorized();}else if(e instanceof ApiError&&e.status===502)setErr(T('audioErr502',lang));else setErr(errorText(e, getLang()))}).finally(()=>setBusy(false))},[id,lang,token,onUnauthorized]);useEffect(()=>{if(playing)onListen()},[playing]);return <div className="audio-box"><div className="audio-icon"><Volume2/></div><div className="audio-main"><b>{T('audioTitle',lang)}</b><p>{busy?T('audioPreparing',lang):err||T('audioReady',lang)}</p>{url&&<audio ref={ref} src={url} controls onPlay={()=>setPlaying(true)} onPause={()=>setPlaying(false)} onTimeUpdate={e=>setProgress(e.currentTarget.currentTime)} onLoadedMetadata={e=>setDuration(e.currentTarget.duration)}/>}<div className="audio-meta">{duration?`${Math.floor(progress/60)}:${String(Math.floor(progress%60)).padStart(2,'0')} / ${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,'0')}`:T('audioHint',lang)}</div>{(busy||err)&&<button className="btn btn-outline" onClick={reload} disabled={busy}>{busy?T('loading',lang):T('retry',lang)}</button>}</div></div>}
 function PoiDetail({ticket}:{ticket:ReturnType<typeof useTicket>}){
- const {onHeaderTicket,ticketModal}=useTicketModal(ticket);const [lang]=useLang();const {id=''}=useParams(),nav=useNavigate(),[poi,setPoi]=useState<POI|null>(null),[err,setErr]=useState(''),[loading,setLoading]=useState(true),[pos,setPos]=useState<[number,number]|null>(null);useEffect(()=>{contentApi.poi(id).then((d:any)=>setPoi(d.poi||d)).catch(e=>setErr(errorText(e))).finally(()=>setLoading(false))},[id]);useEffect(()=>{if(!navigator.geolocation)return;const w=navigator.geolocation.watchPosition(p=>setPos([p.coords.latitude,p.coords.longitude]),()=>{}, {maximumAge:10000});return()=>navigator.geolocation.clearWatch(w)},[]);
-const sendEvent=async(type:string)=>{
-  try{
-    await contentApi.sendEvent(
-      {
-        poi_id:id,
-        type,
-        ...(pos?{lat:pos[0],lon:pos[1]}:{})
-      },
-      ticket.token
-    );
-  } catch (e) {
-  if (!ticket.handleError(e)) {
-    console.warn('sendEvent failed', e);
-  }
+ const {onHeaderTicket,ticketModal}=useTicketModal(ticket);
+ const [lang]=useLang();
+ const {id=''}=useParams(),nav=useNavigate();
+ const [poi,setPoi]=useState<POI|null>(null),[err,setErr]=useState(''),[loading,setLoading]=useState(true);
+ const [pos,setPos]=useState<[number,number]|null>(null);
+ const [gpsReal,setGpsReal]=useState(false); // true khi GPS thật (không phải chọn thủ công)
+
+ useEffect(()=>{setLoading(true);setErr('');contentApi.poi(id).then((d:any)=>setPoi(d.poi||d)).catch(e=>setErr(errorText(e, getLang()))).finally(()=>setLoading(false))},[id,lang]);
+
+ useEffect(()=>{
+   if(!navigator.geolocation)return;
+   const w=navigator.geolocation.watchPosition(
+     p=>{setPos([p.coords.latitude,p.coords.longitude]);setGpsReal(true);},
+     ()=>{setGpsReal(false);},
+     {enableHighAccuracy:true,maximumAge:10000}
+   );
+   return()=>navigator.geolocation.clearWatch(w);
+ },[]);
+
+ // Lệnh 4: sendEvent trả boolean; chỉ ghi key sau khi gửi thành công
+ const insideKeyRef = useRef('');
+ const sendEvent = useCallback(async(type:string, currentPos?:[number,number]|null):Promise<boolean>=>{
+   if(!ticket.valid||!ticket.token) return false;
+   if(!gpsReal) return false; // không gửi khi chọn vị trí thủ công
+   const p = currentPos ?? pos;
+   try{
+     await contentApi.sendEvent(
+       {poi_id:id, type, ...(p?{lat:p[0],lon:p[1]}:{})},
+       ticket.token
+     );
+     return true;
+   } catch(e:any){
+     if(e instanceof ApiError){
+       if(e.status===401){ticket.handleError(e);return false;}
+       if(e.status===422) return false; // out_of_range: không retry
+       if(e.status===429){
+         const wait=(e.retryAfter||5)*1000;
+         await new Promise(r=>setTimeout(r,wait));
+         return false; // không retry vòng lặp; caller có thể thử lại lần sau
+       }
+     }
+     console.warn('sendEvent failed',e);
+     return false;
+   }
+ },[id,pos,gpsReal,ticket]);
+
+ // Lệnh 4: tính ngày VN cho key
+ const todayVN=()=>new Date().toLocaleDateString('vi-VN',{timeZone:'Asia/Ho_Chi_Minh'}).replace(/\//g,'-');
+ const insideKey=()=>`zoo_inside_${ticket.token?.slice(-8)||'anon'}_${todayVN()}_${id}`;
+
+ // Lệnh 4: enter/exit dựa trên GPS thật + ticket.valid
+ useEffect(()=>{
+   if(!poi||!pos||!ticket.valid||!gpsReal)return;
+   const d=Math.hypot((pos[0]-poi.lat)*111000,(pos[1]-poi.lon)*111000*Math.cos(pos[0]*Math.PI/180));
+   const inside=d<=(poi.radius_m||30);
+   const key=insideKey();
+   const was=safeGet(key)==='true';
+   if(inside!==was){
+     if(inside){
+       // Ghi key CHỈ sau khi gửi thành công
+       sendEvent('enter',pos).then(ok=>{
+         if(ok){safeSet(key,'true');insideKeyRef.current=key;}
+       });
+     } else {
+       const prevKey=insideKeyRef.current||key;
+       sendEvent('exit',pos).then(ok=>{
+         if(ok) safeRemove(prevKey);
+         else safeRemove(prevKey); // dù thất bại vẫn clear để tránh stale
+         insideKeyRef.current='';
+       });
+     }
+   } else if(inside && !insideKeyRef.current){
+     insideKeyRef.current=key; // đồng bộ ref khi mount vào trang đang inside
+   }
+ },[poi,pos,ticket.valid,gpsReal]);
+
+ // Lệnh 4: cleanup exit khi unmount (đổi POI) + pagehide (đóng tab)
+ useEffect(()=>{
+   const sendExitBeacon=()=>{
+     if(!insideKeyRef.current||!ticket.valid||!ticket.token) return;
+     const base=(import.meta.env.VITE_API_BASE_URL||'').replace(/\/$/,'');
+     const url=`${base}/api/content/events`;
+     const body=JSON.stringify({poi_id:id,type:'exit',...(pos?{lat:pos[0],lon:pos[1]}:{})});
+     // keepalive để gửi khi tab đóng
+     void fetch(url,{method:'POST',keepalive:true,headers:{'Content-Type':'application/json','Authorization':`Bearer ${ticket.token}`},body});
+     safeRemove(insideKeyRef.current);
+     insideKeyRef.current='';
+   };
+   const onPageHide=()=>sendExitBeacon();
+   window.addEventListener('pagehide',onPageHide);
+   return()=>{
+     window.removeEventListener('pagehide',onPageHide);
+     // cleanup khi rời trang / đổi POI
+     if(insideKeyRef.current&&ticket.valid){
+       sendExitBeacon();
+     }
+   };
+ },[id,ticket.token,ticket.valid,pos]);
+
+
+ if(loading) return (
+   <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="detail-wrap"><div className="skeleton large"/></main></>
+ );
+ const tr=poi?.translations?.[lang];
+ const title=tr?.name||poi?.translations?.en?.name||poi?.translations?.vi?.name||poi?.name||id;
+ const poiContent = poi ? (
+   <>
+     <div className="detail-hero">
+       <div className="detail-photo">
+         {poi.image_url
+           ? <img src={poi.image_url} alt={title} onError={e=>{e.currentTarget.style.display='none'}}/>
+           : <div className="photo-placeholder"><span>🌳</span><span>🦜</span><small>{T('photoTag',lang)}</small></div>
+         }
+       </div>
+       <div className="detail-copy">
+         <span className="category">{catName(poi.category,lang)}</span>
+         <h1>{title}</h1>
+         {poi.species_name && <p className="species">{poi.species_name}</p>}
+       </div>
+     </div>
+     <section className="description-panel">
+       <h2>{labels[lang].description}</h2>
+       <p>{tr?.description||poi?.translations?.en?.description||poi?.translations?.vi?.description||poi?.description||T('noDesc',lang)}</p>
+     </section>
+     {ticket.valid
+       ? <AudioPlayer key={`${id}-${lang}`} id={id} lang={lang} token={ticket.token} onUnauthorized={()=>ticket.expire()} onListen={()=>void sendEvent('listen')}/>
+       : <div className="locked-panel">
+           <div className="lock-circle"><LockKeyhole/></div>
+           <div>
+             <b>{labels[lang].listen}</b>
+             <p>{T('lockedHint',lang)}</p>
+             <Link to="/activate" className="text-link">{T('lockedLink',lang)}</Link>
+           </div>
+           <LockKeyhole className="lock-end"/>
+         </div>
+     }
+   </>
+ ) : null;
+ return (
+   <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}
+     <main className="detail-wrap">
+       <Link className="back-link" to="/">← {T('backAll',lang)}</Link>
+       {err ? <div className="notice error">{err}</div> : poiContent}
+     </main>
+   </>
+ );
 }
-};
-useEffect(()=>{if(!poi||!pos||!ticket.valid)return;const d=Math.hypot((pos[0]-poi.lat)*111000,(pos[1]-poi.lon)*111000*Math.cos(pos[0]*Math.PI/180));const inside=d<=(poi.radius_m||30);const key=`zoo_inside_${id}`,was=localStorage.getItem(key)==='true';if(inside!==was){localStorage.setItem(key,String(inside));void sendEvent(inside?'enter':'exit')}},[poi,pos,ticket.valid]);if(loading)return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="detail-wrap"><div className="skeleton large"/></main></>;const tr=poi?.translations?.[lang];const title=tr?.name||poi?.name||id;return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="detail-wrap"><Link className="back-link" to="/">← {T('backAll',lang)}</Link>{err?<div className="notice error">{err}</div>:poi&&<><div className="detail-hero"><div className="detail-photo">{poi.image_url?<img src={poi.image_url} alt={title} onError={e=>{e.currentTarget.style.display='none'}}/>:<div className="photo-placeholder"><span>🌳</span><span>🦜</span><small>{T('photoTag',lang)}</small></div>}</div><div className="detail-copy"><span className="category">{catName(poi.category,lang)}</span><h1>{title}</h1>{poi.species_name&&<p className="species">{poi.species_name}</p>}</div></div><section className="description-panel"><h2>{labels[lang].description}</h2><p>{tr?.description||poi.description||T('noDesc',lang)}</p></section>{ticket.valid?<AudioPlayer key={`${id}-${lang}`} id={id} lang={lang} token={ticket.token} onUnauthorized={() => ticket.expire()} onListen={()=>void sendEvent('listen')}/>:<div className="locked-panel"><div className="lock-circle"><LockKeyhole/></div><div><b>{labels[lang].listen}</b><p>{T('lockedHint',lang)}</p><Link to="/activate" className="text-link">{T('lockedLink',lang)}</Link></div><LockKeyhole className="lock-end"/></div>}</>}</main></>}
-function StaffLogin({staff}:{staff:ReturnType<typeof useStaff>}){const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),nav=useNavigate();const submit=async(e:any)=>{e.preventDefault();setBusy(true);setErr('');try{const d:any=await authApi.login({username,password});const user={username:d.username||username,role:d.role};staff.login(d.token,user);nav(user.role==='counter'?'/staff/tickets':'/staff/dashboard')}catch(e:any){setErr(e instanceof ApiError&&e.status===401?'Sai tên đăng nhập hoặc mật khẩu.':e instanceof ApiError&&e.status===403?'Tài khoản đã bị khóa.':errorText(e))}finally{setBusy(false)}};return <main className="login-layout"><div className="login-art"><Leaf size={45}/><h1>Thiên nhiên<br/>trong tầm tay.</h1><p>Hệ thống quản lý thuyết minh đa ngôn ngữ<br/>Thảo Cầm Viên Sài Gòn</p><div className="login-leaves">🌿 🦜 🌱</div></div><form className="login-form" onSubmit={submit}><span className="eyebrow">CỔNG QUẢN TRỊ</span><h2>Chào mừng trở lại</h2><p>Đăng nhập để tiếp tục công việc của bạn.</p><label htmlFor="username">Tên đăng nhập</label><input id="username" className="field" value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" required/><label htmlFor="password">Mật khẩu</label><input id="password" className="field" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/>{err&&<div className="notice error">{err}</div>}<button className="btn btn-primary full" disabled={busy}>{busy?'Đang đăng nhập…':'Đăng nhập'}</button>{import.meta.env.DEV&&<div className="demo-hint"><b>Tài khoản demo</b><br/>Admin: admin / admin123<br/>Quầy vé: counter01 / counter123</div>}<Link to="/" className="back-link">← Về trang du khách</Link></form></main>}
+function StaffLogin({staff}:{staff:ReturnType<typeof useStaff>}){const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),nav=useNavigate();const submit=async(e:any)=>{e.preventDefault();setBusy(true);setErr('');try{const d:any=await authApi.login({username,password});const user={username:d.username||username,role:d.role};staff.login(d.token,user);nav(user.role==='counter'?'/staff/tickets':'/staff/dashboard')}catch(e:any){setErr(e instanceof ApiError&&e.status===401?'Sai tên đăng nhập hoặc mật khẩu.':e instanceof ApiError&&e.status===403?'Tài khoản đã bị khóa.':errorText(e, getLang()))}finally{setBusy(false)}};return <main className="login-layout"><div className="login-art"><Leaf size={45}/><h1>Thiên nhiên<br/>trong tầm tay.</h1><p>Hệ thống quản lý thuyết minh đa ngôn ngữ<br/>Thảo Cầm Viên Sài Gòn</p><div className="login-leaves">🌿 🦜 🌱</div></div><form className="login-form" onSubmit={submit}><span className="eyebrow">CỔNG QUẢN TRỊ</span><h2>Chào mừng trở lại</h2><p>Đăng nhập để tiếp tục công việc của bạn.</p><label htmlFor="username">Tên đăng nhập</label><input id="username" className="field" value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" required/><label htmlFor="password">Mật khẩu</label><input id="password" className="field" type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" required/>{err&&<div className="notice error">{err}</div>}<button className="btn btn-primary full" disabled={busy}>{busy?'Đang đăng nhập…':'Đăng nhập'}</button>{import.meta.env.DEV&&<div className="demo-hint"><b>Tài khoản demo</b><br/>Admin: admin / admin123<br/>Quầy vé: counter01 / counter123</div>}<Link to="/" className="back-link">← Về trang du khách</Link></form></main>}
 
 function handleStaffError(
   e:unknown,
@@ -415,7 +549,7 @@ function handleStaffError(
     return;
   }
 
-  setErr(errorText(e));
+  setErr(errorText(e, getLang()));
 }
 
 function StaffLayout({staff,children,adminOnly=false}:{staff:ReturnType<typeof useStaff>;children:any;adminOnly?:boolean}){const nav=useNavigate();if(!staff.token||!staff.user)return <Navigate to="/staff" replace/>;if(adminOnly&&staff.user.role!=='admin')return <Navigate to="/staff/tickets" replace/>;const links=[
@@ -431,6 +565,7 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
 
   const [tickets,setTickets]=useState<any[]>([]);
   const [created,setCreated]=useState<any>(null);
+  const [copied,setCopied]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
 
@@ -515,10 +650,12 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
               className="btn btn-outline"
               onClick={()=>{
                 void navigator.clipboard?.writeText(created.code||'');
+                setCopied(true);
+                setTimeout(()=>setCopied(false),2000);
               }}
             >
-              <Copy size={16}/>
-              Sao chép mã vé
+              {copied?<CheckCircle size={16}/>:<Copy size={16}/>}
+              {copied?'Đã sao chép!':'Sao chép mã vé'}
             </button>
 
             <button
@@ -742,7 +879,7 @@ function PoiForm({
       if(e instanceof ApiError&&e.status===401){
         onUnauthorized();
       }else{
-        setErr(errorText(e));
+        setErr(errorText(e, getLang()));
       }
 
     }finally{
@@ -770,7 +907,7 @@ function PoiForm({
       if(e instanceof ApiError&&e.status===401){
         onUnauthorized();
       }else{
-        setErr(errorText(e));
+        setErr(errorText(e, getLang()));
       }
     }
   };
@@ -969,7 +1106,7 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
       setPois(d.pois||[]);
       setErr('');
     }catch(e){
-      setErr(errorText(e));
+      setErr(errorText(e, getLang()));
     }finally{
       setLoading(false);
     }
@@ -1330,6 +1467,7 @@ function Accounts({staff}:{staff:ReturnType<typeof useStaff>}){
 }
 
 export default function App() {
+  const [lang] = useLang();
   const ticket = useTicket();
   const staff = useStaff();
 
@@ -1338,9 +1476,9 @@ export default function App() {
       {/* Thông báo khi vé hết hạn hoặc bị chuyển sang thiết bị khác */}
       {ticket.notice && (
         <div className="notice warn ticket-notice">
-          {ticket.notice}{' '}
-          <Link to="/activate">Nhập mã vé</Link>
-          <button onClick={ticket.dismissNotice}>×</button>
+          {T(ticket.notice, lang)}{' '}
+          <Link to="/activate">{T('enterCode', lang)}</Link>
+          <button aria-label={T('closeNotice', lang)} onClick={ticket.dismissNotice}>×</button>
         </div>
       )}
 
