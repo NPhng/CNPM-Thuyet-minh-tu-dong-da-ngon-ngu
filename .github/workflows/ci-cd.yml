@@ -1,0 +1,144 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ----------------------------------------------------
+  # 1. Test Backend Microservices (FastAPI + pytest)
+  # ----------------------------------------------------
+  test-backend:
+    name: Test ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [service-auth, service-content, service-audio]
+    env:
+      TESTING: "1"
+      AUDIO_DIR: /tmp/audio_files
+      JWT_SECRET: test-secret-key-32bytes-for-ci-only!!
+      MONGO_URI: mongodb://localhost:27017
+      DB_NAME: zoo_test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: source/${{ matrix.service }}/requirements.txt
+
+      - name: Install dependencies
+        working-directory: source/${{ matrix.service }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest httpx
+
+      - name: Run pytest
+        working-directory: source/${{ matrix.service }}
+        run: pytest -v
+
+  # ----------------------------------------------------
+  # 2. Test & Build Frontend Web (React + Vite + TS)
+  # ----------------------------------------------------
+  build-frontend:
+    name: Build Web Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+          cache-dependency-path: source/web/package-lock.json
+
+      - name: Install npm dependencies
+        working-directory: source/web
+        run: npm ci
+
+      - name: Build Web Application
+        working-directory: source/web
+        run: npm run build
+
+  # ----------------------------------------------------
+  # 3. Validate Docker Compose Build
+  # ----------------------------------------------------
+  docker-compose-build:
+    name: Validate Docker Compose
+    needs: [test-backend, build-frontend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare environment file
+        run: cp source/.env.example source/.env
+
+      - name: Build Docker Compose services
+        run: docker compose -f source/docker-compose.yml build
+
+  # ----------------------------------------------------
+  # 4. Continuous Delivery: Publish Docker Images (GHCR)
+  # ----------------------------------------------------
+  publish-images:
+    name: Publish Docker Images to GHCR
+    needs: [docker-compose-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: service-auth
+            image: auth-service
+          - service: service-content
+            image: content-service
+          - service: service-audio
+            image: audio-service
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=short
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: source/${{ matrix.service }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
