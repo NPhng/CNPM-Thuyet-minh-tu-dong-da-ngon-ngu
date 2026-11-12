@@ -215,6 +215,35 @@ class ActivateTicketRequest(BaseModel):
     )
 
 
+async def _check_user_active(payload: dict) -> dict:
+    """Tra DB theo payload['sub']; 401 nếu không tìm thấy hoặc tài khoản bị khóa."""
+    user = await get_db()["users"].find_one({"id": payload.get("sub")})
+    if not user:
+        raise HTTPException(status_code=401, detail="Token không hợp lệ")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa")
+    return payload
+
+
+async def get_active_staff(payload: dict = Depends(get_current_staff)) -> dict:
+    """Xác thực staff token VÀ kiểm tra tài khoản còn hoạt động trong DB."""
+    return await _check_user_active(payload)
+
+
+def require_active_roles(*roles: str):
+    """Kiểm tra role (403) TRƯỚC, sau đó mới tra DB (401) — giữ behaviour 403 cho sai role."""
+
+    async def _check(payload: dict = Depends(get_current_staff)) -> dict:
+        if payload.get("role") not in roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Chỉ {'/'.join(roles)} mới có quyền thực hiện thao tác này",
+            )
+        return await _check_user_active(payload)
+
+    return _check
+
+
 def require_internal(x_internal_key: Optional[str] = Header(default=None, alias="X-Internal-Key")):
     if x_internal_key != INTERNAL_SERVICE_KEY:
         raise HTTPException(status_code=401, detail="Internal key không hợp lệ")
@@ -270,7 +299,7 @@ async def login(request: LoginRequest):
 
 
 @app.get("/me")
-async def get_me(payload: dict = Depends(get_current_staff)):
+async def get_me(payload: dict = Depends(get_active_staff)):
     db = get_db()
     user = await db["users"].find_one({"username": payload["username"]})
     if not user:
@@ -279,14 +308,14 @@ async def get_me(payload: dict = Depends(get_current_staff)):
 
 
 @app.get("/users")
-async def list_users(_: dict = Depends(require_roles("admin"))):
+async def list_users(_: dict = Depends(require_active_roles("admin"))):
     db = get_db()
     users = await db["users"].find({}).to_list(length=500)
     return {"total": len(users), "users": [serialize_user(u) for u in users]}
 
 
 @app.post("/users", status_code=201)
-async def create_user(data: UserCreate, payload: dict = Depends(require_roles("admin"))):
+async def create_user(data: UserCreate, payload: dict = Depends(require_active_roles("admin"))):
     if data.role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail=f"Role không hợp lệ. Chọn: {sorted(VALID_ROLES)}")
 
@@ -315,7 +344,7 @@ async def create_user(data: UserCreate, payload: dict = Depends(require_roles("a
 async def set_user_status(
     user_id: str,
     body: UserStatusUpdate,
-    payload: dict = Depends(require_roles("admin")),
+    payload: dict = Depends(require_active_roles("admin")),
 ):
     db = get_db()
     target = await db["users"].find_one({"id": user_id})
@@ -330,7 +359,7 @@ async def set_user_status(
 
 
 @app.post("/tickets", status_code=201)
-async def create_ticket(staff: dict = Depends(require_roles("counter", "admin"))):
+async def create_ticket(staff: dict = Depends(require_active_roles("counter", "admin"))):
     ticket = await create_ticket_doc(get_db(), staff["username"])
     return {
         **serialize_ticket(ticket),
@@ -339,7 +368,7 @@ async def create_ticket(staff: dict = Depends(require_roles("counter", "admin"))
 
 
 @app.get("/tickets/today")
-async def list_tickets_today(_: dict = Depends(require_roles("counter", "admin"))):
+async def list_tickets_today(_: dict = Depends(require_active_roles("counter", "admin"))):
     db = get_db()
     start, end = vn_day_bounds()
     docs = await db["tickets"].find({"created_at": {"$gte": start, "$lte": end}}).to_list(length=2000)

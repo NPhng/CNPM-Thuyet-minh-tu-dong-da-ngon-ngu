@@ -214,7 +214,7 @@ def test_get_me_without_token():
 
 
 def test_list_users_admin(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_return=[ADMIN_USER, COUNTER_USER]))
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER, find_return=[ADMIN_USER, COUNTER_USER]))
     resp = client.get("/users", headers={"Authorization": f"Bearer {_admin_token()}"})
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
@@ -226,7 +226,7 @@ def test_list_users_counter_forbidden():
 
 
 def test_create_user_admin(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "newcounter", "password": "pass1234", "role": "counter"},
@@ -238,7 +238,7 @@ def test_create_user_admin(monkeypatch):
 
 
 def test_create_user_invalid_role(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "hacker", "password": "pass", "role": "tourist"},
@@ -248,7 +248,7 @@ def test_create_user_invalid_role(monkeypatch):
 
 
 def test_create_user_manager_role_rejected(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "mgr", "password": "pass", "role": "manager"},
@@ -387,6 +387,9 @@ def ticket_db(monkeypatch):
         return await store["tickets"].find_one({"id": ticket_id})
 
     set_ticket_lookup(_lookup)
+    # Nạp sẵn user để get_active_staff / require_active_roles tìm thấy
+    store["users"].docs.append(dict(ADMIN_USER))
+    store["users"].docs.append(dict(COUNTER_USER))
     yield store
     set_ticket_lookup(None)
 
@@ -643,3 +646,38 @@ def test_jwt_auth_ticket_errors_structured(ticket_db):
     r_503 = client.get("/tickets/me", headers={"Authorization": f"Bearer {non_existent_token}"})
     assert r_503.status_code == 503
     assert r_503.json()["detail"]["error"] == "service_unavailable"
+
+
+# ---------- Test kiểm tra is_active khi token còn hạn ----------
+
+def _locked_token():
+    return make_staff_token("uid-locked-001", "locked_user", "counter")
+
+
+def test_locked_counter_post_tickets_401(monkeypatch):
+    """Counter bị khóa: token hợp lệ nhưng is_active=False -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=LOCKED_USER))
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_locked_token()}"})
+    assert resp.status_code == 401
+    assert "khóa" in resp.json()["detail"]
+
+
+def test_active_counter_post_tickets_201(ticket_db):
+    """Counter còn hoạt động: token hợp lệ và is_active=True -> 201."""
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert resp.status_code == 201
+
+
+def test_user_deleted_from_db_401(monkeypatch):
+    """Token hợp lệ nhưng user da bi xoa khoi DB -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=None))
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert resp.status_code == 401
+
+
+def test_locked_counter_get_tickets_today_401(monkeypatch):
+    """Counter bi khoa goi GET /tickets/today -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=LOCKED_USER))
+    resp = client.get("/tickets/today", headers={"Authorization": f"Bearer {_locked_token()}"})
+    assert resp.status_code == 401
+    assert "khóa" in resp.json()["detail"]
