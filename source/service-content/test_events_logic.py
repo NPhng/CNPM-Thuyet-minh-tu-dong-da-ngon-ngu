@@ -207,10 +207,10 @@ def test_presence_per_poi_matrix():
     es, ts = stores(_presence_events())
     data = run(stats.build_pois(es, POIS, NOW, S))
     by_id = {r["poi_id"]: r for r in data["pois"]}
-    # p1: A C D E2 G H M N = 8 ; p2: J = 1
-    assert by_id["p1"]["present_now"] == 8
+    # p1: A C D E2 G H M N K = 9 ; p2: J = 1 (K nghe ngoài vùng vẫn tính hoạt động)
+    assert by_id["p1"]["present_now"] == 9
     assert by_id["p2"]["present_now"] == 1
-    assert data["present_total"] == 9  # mỗi vé chỉ đếm một lần (J không bị đếm ở cả p1 và p2)
+    assert data["present_total"] == 10  # mỗi vé chỉ đếm một lần (J không bị đếm ở cả p1 và p2)
     assert [r["poi_id"] for r in data["pois"]] == ["p1", "p2"]  # sắp xếp theo present_now giảm dần
 
 
@@ -262,7 +262,7 @@ def test_passes_are_distinct_tickets_with_listen_or_enter():
     ]
     es, ts = stores(events)
     rows = {r["poi_id"]: r["passes_today"] for r in run(stats.build_pois(es, POIS, NOW, S))["pois"]}
-    assert rows == {"p1": 3, "p2": 1}  # p1: X, V, G
+    assert rows == {"p1": 4, "p2": 1}  # p1: X, V, G, Z (Z nghe ngoài vùng vẫn tính)
 
 
 def test_passes_day_boundary_next_day():
@@ -322,7 +322,7 @@ def test_hourly_series_for_vn_day():
     assert h[8]["tickets_sold"] == 2
 
     assert h[9]["events"]["listen"] == 1 and h[9]["active_tickets"] == 1
-    assert h[9]["visits"] == 0                  # listen ngoài vùng không tính lượt ghé
+    assert h[9]["visits"] == 1                  # listen ngoài vùng vẫn tính lượt ghé
 
     assert h[0]["tickets_sold"] == 1 and h[0]["events"]["total"] == 0
     assert h[23]["events"]["enter"] == 1 and h[23]["tickets_sold"] == 1 and h[23]["visits"] == 1
@@ -541,3 +541,13 @@ def test_sliding_window_limiter_boundary():
     assert lim.check("k", 1, 10, NOW) is None
     assert lim.check("k", 1, 10, NOW + timedelta(seconds=9, microseconds=999999)) is not None
     assert lim.check("k", 1, 10, NOW + timedelta(seconds=10)) is None
+
+def test_compute_passes_includes_listen_outside_zone():
+    events = [
+        {"ticket_id": "t1", "poi_id": "p1", "type": "listen", "in_zone": False},
+        {"ticket_id": "t2", "poi_id": "p1", "type": "enter", "in_zone": False},   # enter ngoài vùng không tính
+        {"ticket_id": "t3", "poi_id": "p1", "type": "enter", "in_zone": True},    # enter trong vùng tính
+    ]
+    res = stats.compute_passes(events)
+    assert res == {"p1": 2}  # t1 (listen ngoài vùng) và t3 (enter trong vùng)
+

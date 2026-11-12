@@ -411,8 +411,8 @@ function PoiDetail({ticket}:{ticket:ReturnType<typeof useTicket>}){
  const insideKeyRef = useRef('');
  const sendEvent = useCallback(async(type:string, currentPos?:[number,number]|null):Promise<boolean>=>{
    if(!ticket.valid||!ticket.token) return false;
-   if(!gpsReal) return false; // không gửi khi chọn vị trí thủ công
-   const p = currentPos ?? pos;
+   if(type !== 'listen' && !gpsReal) return false;
+   const p = gpsReal ? (currentPos ?? pos) : null;
    try{
      await contentApi.sendEvent(
        {poi_id:id, type, ...(p?{lat:p[0],lon:p[1]}:{})},
