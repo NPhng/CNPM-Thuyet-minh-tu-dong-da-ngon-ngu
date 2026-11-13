@@ -25,6 +25,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, model_validator
 
 import stats
+import translator
 from audio_client import INTERNAL_SERVICE_KEY, delete_poi_audio, generate_poi_audio, warmup_all_audio
 from auth_client import HttpTicketStore
 from event_service import EventIngestor, serialize_event
@@ -179,6 +180,11 @@ class POIUpdate(BaseModel):
 class TranslationUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1)
     description: Optional[str] = Field(None, min_length=1)
+
+
+class TranslateRequest(BaseModel):
+    name: str
+    description: str
 
 
 def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -374,6 +380,48 @@ async def create_poi(
     langs = [lang for lang in LANGS if translations.get(lang, {}).get("description")]
     background_tasks.add_task(generate_poi_audio, new_id, langs)
     return {"message": "Thêm địa điểm thành công!", "poi": public_poi(new_poi)}
+
+
+@app.post("/translate")
+async def translate_poi(
+    body: TranslateRequest,
+    _: dict = Depends(require_roles("admin")),
+):
+    name = (body.name or "").strip()
+    desc = (body.description or "").strip()
+    if not name or not desc:
+        raise HTTPException(status_code=400, detail="Tên và mô tả tiếng Việt không được để trống")
+    if len(name) > 200:
+        raise HTTPException(status_code=400, detail="Tên không được vượt quá 200 ký tự")
+    if len(desc) > 4500:
+        raise HTTPException(status_code=400, detail="Mô tả không được vượt quá 4500 ký tự")
+
+    async def _do_translations():
+        tasks = [
+            asyncio.to_thread(translator.translate_text, name, "en"),
+            asyncio.to_thread(translator.translate_text, desc, "en"),
+            asyncio.to_thread(translator.translate_text, name, "zh"),
+            asyncio.to_thread(translator.translate_text, desc, "zh"),
+            asyncio.to_thread(translator.translate_text, name, "ja"),
+            asyncio.to_thread(translator.translate_text, desc, "ja"),
+            asyncio.to_thread(translator.translate_text, name, "ko"),
+            asyncio.to_thread(translator.translate_text, desc, "ko"),
+        ]
+        res = await asyncio.gather(*tasks)
+        return {
+            "translations": {
+                "en": {"name": res[0], "description": res[1]},
+                "zh": {"name": res[2], "description": res[3]},
+                "ja": {"name": res[4], "description": res[5]},
+                "ko": {"name": res[6], "description": res[7]},
+            }
+        }
+
+    try:
+        return await asyncio.wait_for(_do_translations(), timeout=25)
+    except Exception as exc:
+        log.exception("Lỗi khi dịch ngôn ngữ: %s", exc)
+        raise HTTPException(status_code=502, detail="Không dịch được, vui lòng thử lại sau")
 
 
 @app.put("/pois/{poi_id}")

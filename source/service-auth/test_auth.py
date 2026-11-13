@@ -214,7 +214,7 @@ def test_get_me_without_token():
 
 
 def test_list_users_admin(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_return=[ADMIN_USER, COUNTER_USER]))
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER, find_return=[ADMIN_USER, COUNTER_USER]))
     resp = client.get("/users", headers={"Authorization": f"Bearer {_admin_token()}"})
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
@@ -226,7 +226,7 @@ def test_list_users_counter_forbidden():
 
 
 def test_create_user_admin(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "newcounter", "password": "pass1234", "role": "counter"},
@@ -238,7 +238,7 @@ def test_create_user_admin(monkeypatch):
 
 
 def test_create_user_invalid_role(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "hacker", "password": "pass", "role": "tourist"},
@@ -248,7 +248,7 @@ def test_create_user_invalid_role(monkeypatch):
 
 
 def test_create_user_manager_role_rejected(monkeypatch):
-    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db())
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=ADMIN_USER))
     resp = client.post(
         "/users",
         json={"username": "mgr", "password": "pass", "role": "manager"},
@@ -387,6 +387,9 @@ def ticket_db(monkeypatch):
         return await store["tickets"].find_one({"id": ticket_id})
 
     set_ticket_lookup(_lookup)
+    # Nạp sẵn user để get_active_staff / require_active_roles tìm thấy
+    store["users"].docs.append(dict(ADMIN_USER))
+    store["users"].docs.append(dict(COUNTER_USER))
     yield store
     set_ticket_lookup(None)
 
@@ -643,3 +646,176 @@ def test_jwt_auth_ticket_errors_structured(ticket_db):
     r_503 = client.get("/tickets/me", headers={"Authorization": f"Bearer {non_existent_token}"})
     assert r_503.status_code == 503
     assert r_503.json()["detail"]["error"] == "service_unavailable"
+
+
+# ---------- Test kiểm tra is_active khi token còn hạn ----------
+
+def _locked_token():
+    return make_staff_token("uid-locked-001", "locked_user", "counter")
+
+
+def test_locked_counter_post_tickets_401(monkeypatch):
+    """Counter bị khóa: token hợp lệ nhưng is_active=False -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=LOCKED_USER))
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_locked_token()}"})
+    assert resp.status_code == 401
+    assert "khóa" in resp.json()["detail"]
+
+
+def test_active_counter_post_tickets_201(ticket_db):
+    """Counter còn hoạt động: token hợp lệ và is_active=True -> 201."""
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert resp.status_code == 201
+
+
+def test_user_deleted_from_db_401(monkeypatch):
+    """Token hợp lệ nhưng user da bi xoa khoi DB -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=None))
+    resp = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert resp.status_code == 401
+
+
+def test_locked_counter_get_tickets_today_401(monkeypatch):
+    """Counter bi khoa goi GET /tickets/today -> 401."""
+    monkeypatch.setattr(auth_main, "get_db", lambda: _mock_db(find_one_return=LOCKED_USER))
+    resp = client.get("/tickets/today", headers={"Authorization": f"Bearer {_locked_token()}"})
+    assert resp.status_code == 401
+    assert "khóa" in resp.json()["detail"]
+
+
+# ---------- Test GET /tickets & Hủy vé ----------
+
+def test_list_tickets_admin_success(ticket_db):
+    """GET /tickets: admin 200, mặc định hôm nay."""
+    _create_ticket(ticket_db)
+    resp = client.get("/tickets", headers={"Authorization": f"Bearer {_admin_token()}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] == 1
+    assert "date_from" in data
+    assert "date_to" in data
+    assert len(data["tickets"]) == 1
+
+
+def test_list_tickets_counter_forbidden(ticket_db):
+    """GET /tickets: counter 403."""
+    resp = client.get("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert resp.status_code == 403
+
+
+def test_list_tickets_invalid_range(ticket_db):
+    """GET /tickets: date_to < date_from -> 400, khoảng > 93 ngày -> 400."""
+    r1 = client.get(
+        "/tickets?date_from=2026-05-10&date_to=2026-05-01",
+        headers={"Authorization": f"Bearer {_admin_token()}"},
+    )
+    assert r1.status_code == 400
+
+    r2 = client.get(
+        "/tickets?date_from=2026-01-01&date_to=2026-05-01",
+        headers={"Authorization": f"Bearer {_admin_token()}"},
+    )
+    assert r2.status_code == 400
+
+
+def test_cancel_ticket_counter_today(ticket_db):
+    """Counter hủy vé hôm nay -> 200 status 'cancelled'; hủy lần 2 -> 409; vé không tồn tại -> 404."""
+    res = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert res.status_code == 201
+    ticket = res.json()
+    ticket_id = ticket["id"]
+    code = ticket["code"]
+
+    r_404 = client.post("/tickets/non-existent-id/cancel", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r_404.status_code == 404
+
+    r_cancel = client.post(f"/tickets/{ticket_id}/cancel", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r_cancel.status_code == 200
+    data = r_cancel.json()
+    assert data["status"] == "cancelled"
+    assert data["cancelled_at"] is not None
+
+    r_re_cancel = client.post(f"/tickets/{ticket_id}/cancel", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r_re_cancel.status_code == 409
+    assert "hủy" in r_re_cancel.json()["detail"].lower()
+
+    r_activate = client.post("/tickets/activate", json={"code": code, "device_id": DEVICE_A})
+    assert r_activate.status_code == 410
+    detail = r_activate.json()["detail"]
+    assert detail["error"] == "ticket_cancelled"
+    assert "hủy" in detail["message"].lower()
+
+
+def test_cancel_ticket_created_between_excludes_cancelled(ticket_db):
+    """created-between không còn chứa vé đã hủy."""
+    r1 = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r1.status_code == 201
+    t1 = r1.json()
+
+    r2 = client.post("/tickets", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r2.status_code == 201
+    t2 = r2.json()
+
+    now = datetime.now(timezone.utc)
+    start_iso = (now - timedelta(hours=1)).isoformat()
+    end_iso = (now + timedelta(hours=1)).isoformat()
+
+    resp_cb_before = client.get(
+        "/internal/tickets/created-between",
+        params={"start": start_iso, "end": end_iso},
+        headers={"X-Internal-Key": auth_main.INTERNAL_SERVICE_KEY},
+    )
+    assert resp_cb_before.status_code == 200
+    ids_before = [x["id"] for x in resp_cb_before.json()["tickets"]]
+    assert t1["id"] in ids_before
+    assert t2["id"] in ids_before
+
+    r_cancel = client.post(f"/tickets/{t1['id']}/cancel", headers={"Authorization": f"Bearer {_admin_token()}"})
+    assert r_cancel.status_code == 200
+
+    resp_cb_after = client.get(
+        "/internal/tickets/created-between",
+        params={"start": start_iso, "end": end_iso},
+        headers={"X-Internal-Key": auth_main.INTERNAL_SERVICE_KEY},
+    )
+    assert resp_cb_after.status_code == 200
+    ids_after = [x["id"] for x in resp_cb_after.json()["tickets"]]
+    assert t1["id"] not in ids_after
+    assert t2["id"] in ids_after
+
+
+def test_cancel_ticket_expired_and_counter_past(ticket_db):
+    """Hủy vé đã hết hạn -> 400; Counter hủy vé quá khứ -> 403; Admin hủy vé quá khứ -> 200."""
+    now = datetime.now(timezone.utc)
+    doc_expired = {
+        "id": "t-expired-001",
+        "code": "ZCV-EXPI-RED1-0001",
+        "created_by": "counter01",
+        "created_at": now - timedelta(hours=2),
+        "expires_at": now - timedelta(minutes=10),
+        "token_version": 0,
+        "device_id": None,
+    }
+    ticket_db["tickets"].docs.append(doc_expired)
+
+    r_exp = client.post(f"/tickets/{doc_expired['id']}/cancel", headers={"Authorization": f"Bearer {_admin_token()}"})
+    assert r_exp.status_code == 400
+    assert "hết hạn" in r_exp.json()["detail"].lower()
+
+    doc_yesterday = {
+        "id": "t-yesterday-001",
+        "code": "ZCV-YEST-ERDA-0001",
+        "created_by": "counter01",
+        "created_at": now - timedelta(days=2),
+        "expires_at": now + timedelta(days=1),
+        "token_version": 0,
+        "device_id": None,
+    }
+    ticket_db["tickets"].docs.append(doc_yesterday)
+
+    r_counter_past = client.post(f"/tickets/{doc_yesterday['id']}/cancel", headers={"Authorization": f"Bearer {_counter_token()}"})
+    assert r_counter_past.status_code == 403
+
+    r_admin_past = client.post(f"/tickets/{doc_yesterday['id']}/cancel", headers={"Authorization": f"Bearer {_admin_token()}"})
+    assert r_admin_past.status_code == 200
+    assert r_admin_past.json()["status"] == "cancelled"

@@ -11,7 +11,7 @@ Thống kê dashboard (giai đoạn 4). Các hàm compute_* là thuần túy, bu
 3. Số người đang ở trong điểm P. Với mỗi cặp (vé, điểm), duyệt sự kiện theo thời gian:
      - exit  -> xóa trạng thái (không còn ở điểm).
      - enter -> ghi nhớ "đã vào" và "hoạt động gần nhất".
-     - listen (không bị đánh dấu ngoài vùng) -> cập nhật "hoạt động gần nhất".
+     - listen -> cập nhật "hoạt động gần nhất".
    Vé được tính là đang ở P nếu thỏa MỘT trong hai:
      (a) đã enter, chưa exit sau đó, và lần enter gần nhất cách bây giờ <= PRESENCE_ENTER_TTL_MINUTES
          (mặc định 120 phút; chặn "người ma" khi app không gửi được exit);
@@ -21,7 +21,7 @@ Thống kê dashboard (giai đoạn 4). Các hàm compute_* là thuần túy, bu
    khi thiếu exit hoặc hai vùng chồng nhau.
 
 4. Lượt đi qua điểm P hôm nay: số vé DISTINCT có listen hoặc enter tại P trong ngày VN.
-   Sự kiện có GPS xác nhận nằm ngoài vùng (in_zone=false) không tính; không có GPS (in_zone=null) vẫn tính.
+   Nghe thuyết minh luôn tính; enter có GPS xác nhận ngoài vùng không tính.
 
 5. Chuỗi theo giờ: 24 mốc 00..23 giờ VN của một ngày. Mỗi giờ: số vé bán, số sự kiện theo loại,
    số vé hoạt động (distinct trong giờ đó), số lượt ghé (cặp (vé, điểm) distinct có listen/enter
@@ -56,14 +56,18 @@ DEFINITIONS = {
         "hoặc có enter/listen tại điểm trong N phút gần nhất và chưa exit sau đó. "
         "Mỗi vé chỉ gán vào điểm có hoạt động gần nhất."
     ),
-    "passes_today": "Số vé distinct có listen hoặc enter tại điểm trong ngày VN; bỏ sự kiện có GPS xác nhận ngoài vùng.",
+    "passes_today": "Số vé distinct có listen hoặc enter tại điểm trong ngày VN (nghe thuyết minh luôn tính; enter ngoài vùng không tính).",
     "hourly": "24 mốc giờ VN; visits = cặp (vé, điểm) distinct có listen/enter trong giờ đó.",
 }
 
 
 def counts_as_visit(event: dict) -> bool:
-    """listen/enter và không bị xác nhận là ngoài vùng kích hoạt."""
-    return event["type"] in VISIT_TYPES and event.get("in_zone") is not False
+    """listen luôn tính; enter chỉ tính khi không bị xác nhận ngoài vùng."""
+    if event["type"] == "listen":
+        return True
+    if event["type"] == "enter":
+        return event.get("in_zone") is not False
+    return False
 
 
 # ------------------------------------------------------------ phép tính thuần
@@ -115,7 +119,7 @@ def compute_presence(events: Iterable[dict], now: datetime, settings: Settings) 
 
 
 def compute_passes(day_events: Iterable[dict]) -> dict[str, int]:
-    """{poi_id: số vé distinct có listen/enter (trong vùng) tại điểm}."""
+    """{poi_id: số vé distinct có listen/enter tại điểm}."""
     seen: dict[str, set[str]] = defaultdict(set)
     for e in day_events:
         if counts_as_visit(e):

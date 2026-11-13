@@ -155,3 +155,9 @@ html {
 .audio-box:hover {
   border-color: #bbf7d0;
 }
+.marker-red{filter:hue-rotate(150deg) saturate(1.6);}
+.ticket-filter-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:12px 0 16px;}
+.ticket-filter-bar input[type="date"]{height:36px;border:1px solid #d7e5d9;border-radius:9px;padding:0 10px;background:white;color:var(--text);font-size:12px;outline:none;}
+.ticket-filter-bar input[type="date"]:focus{border-color:var(--green-600);}
+.ticket-filter-bar .filter-group{display:flex;align-items:center;gap:6px;}
+.ticket-filter-bar label{font-size:12px;font-weight:700;color:var(--muted);}

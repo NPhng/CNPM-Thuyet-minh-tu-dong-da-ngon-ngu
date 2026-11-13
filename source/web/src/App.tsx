@@ -108,13 +108,14 @@ function qrWarning(url: string) {
 }
 // Vite đổi tên file ảnh của Leaflet nên icon mặc định bị vỡ; khai báo icon tường minh.
 const zooMarkerIcon=L.icon({iconUrl:markerIcon,iconRetinaUrl:markerIcon2x,shadowUrl:markerShadow,iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],tooltipAnchor:[16,-28],shadowSize:[41,41]});
+const zooMarkerIconRed=L.icon({iconUrl:markerIcon,iconRetinaUrl:markerIcon2x,shadowUrl:markerShadow,iconSize:[25,41],iconAnchor:[12,41],popupAnchor:[1,-34],tooltipAnchor:[16,-28],shadowSize:[41,41],className:'marker-red'});
 function IconMarker({category}:{category:string}){return <span className="marker">{category==='chim'?'🐦':category==='thu_an_thit'?'🦁':category==='thu_an_co'?'🦒':category==='linh_truong'?'🐒':category==='bo_sat_luong_cu'?'🐢':'🌿'}</span>}
 function MapClick({onPick}:{onPick:(lat:number,lon:number)=>void}){useMapEvents({click(e){onPick(e.latlng.lat,e.latlng.lng)}});return null}
 const poiName=(p:POI,l:Lang)=>p.translations?.[l]?.name||p.translations?.en?.name||p.translations?.vi?.name||p.name||p.id;
 const poiDesc=(p:POI,l:Lang)=>p.translations?.[l]?.description||p.translations?.en?.description||p.translations?.vi?.description||p.description||p.species_name||'';
 const distanceM=(a:[number,number],b:[number,number])=>{const R=6371000,r=(x:number)=>x*Math.PI/180,dLat=r(b[0]-a[0]),dLon=r(b[1]-a[1]);const h=Math.sin(dLat/2)**2+Math.cos(r(a[0]))*Math.cos(r(b[0]))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(h))};
 function FlyTo({target}:{target?:[number,number]|null}){const map=useMap();useEffect(()=>{if(target)map.flyTo(target,17)},[target?.[0],target?.[1],map]);return null}
-function MapView({pois,position,onPick,manual,focus}:{pois:POI[];position?:[number,number]|null;onPick?:(lat:number,lon:number)=>void;manual?:boolean;focus?:[number,number]|null}){const [lang]=useLang();const center: [number,number]=position||[10.78755,106.70528];return <MapContainer center={center} zoom={16} scrollWheelZoom className="map"><TileLayer attribution='&copy; OpenStreetMap contributors' url={TILE}/><FlyTo target={focus}/>{pois.map(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon)?<span key={p.id}><Marker icon={zooMarkerIcon} position={[p.lat,p.lon]}><Popup><b>{poiName(p,lang)}</b><br/><Link to={`/poi/${p.id}`}>{T('viewDetail',lang)}</Link></Popup></Marker>{p.radius_m?<Circle center={[p.lat,p.lon]} radius={p.radius_m} pathOptions={{color:'#16a34a',fillOpacity:.08}}/>:null}</span>:null)}{position&&<Circle center={position} radius={manual?12:8} pathOptions={manual?{color:'#f59e0b',fillColor:'#fbbf24',fillOpacity:1}:{color:'#2563eb',fillColor:'#3b82f6',fillOpacity:1}}>{manual&&<LeafletTooltip permanent direction="top">{T('yourPos',lang)}</LeafletTooltip>}</Circle>}{onPick&&<MapClick onPick={onPick}/>}</MapContainer>}
+function MapView({pois,position,onPick,manual,focus,redIds,onSelect,distances}:{pois:POI[];position?:[number,number]|null;onPick?:(lat:number,lon:number)=>void;manual?:boolean;focus?:[number,number]|null;redIds?:string[];onSelect?:(id:string)=>void;distances?:Record<string,number>}){const [lang]=useLang();const center: [number,number]=position||[10.78755,106.70528];return <MapContainer center={center} zoom={16} scrollWheelZoom className="map"><TileLayer attribution='&copy; OpenStreetMap contributors' url={TILE}/><FlyTo target={focus}/>{pois.map(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon)?<span key={p.id}><Marker icon={redIds?.includes(p.id)?zooMarkerIconRed:zooMarkerIcon} zIndexOffset={redIds?.includes(p.id)?1000:undefined} eventHandlers={{click:()=>onSelect?.(p.id)}} position={[p.lat,p.lon]}><Popup><b>{poiName(p,lang)}{distances?.[p.id]!==undefined?` · cách ~${distances[p.id]<1000?`${Math.round(distances[p.id])} m`:`${(distances[p.id]/1000).toFixed(1)} km`}`:''}</b><br/><Link to={`/poi/${p.id}`}>{T('viewDetail',lang)}</Link></Popup></Marker>{p.radius_m?<Circle center={[p.lat,p.lon]} radius={p.radius_m} pathOptions={{color:'#16a34a',fillOpacity:.08}}/>:null}</span>:null)}{position&&<Circle center={position} radius={manual?12:8} pathOptions={manual?{color:'#f59e0b',fillColor:'#fbbf24',fillOpacity:1}:{color:'#2563eb',fillColor:'#3b82f6',fillOpacity:1}}>{manual&&<LeafletTooltip permanent direction="top">{T('yourPos',lang)}</LeafletTooltip>}</Circle>}{onPick&&<MapClick onPick={onPick}/>}</MapContainer>}
 const FLAGS:Record<Lang,string>={vi:'🇻🇳 VI',en:'🇬🇧 EN',zh:'🇨🇳 中文',ja:'🇯🇵 日本語',ko:'🇰🇷 한국어'};
 function Header({hasTicket,onTicket}:{hasTicket:boolean;onTicket:()=>void}){const [lang,setLang]=useLang();return <header className="topbar"><Link to="/" className="brand"><span className="brand-icon"><Leaf/></span><span><b>Thảo Cầm Viên</b><small>{T('brandSub',lang)}</small></span></Link><div className="topbar-actions"><select className="lang-select" aria-label="Language" value={lang} onChange={e=>setLang(e.target.value as Lang)}>{languages.map(l=><option key={l} value={l}>{FLAGS[l]}</option>)}</select><button className="btn btn-light" onClick={onTicket}><Ticket size={17}/> {hasTicket?labels[lang].myTicket:labels[lang].activate}</button></div></header>}
 function useTicketModal(ticket:ReturnType<typeof useTicket>){
@@ -178,9 +179,11 @@ function GuestHome({ticket}:{ticket:ReturnType<typeof useTicket>}){
  // Vị trí chọn tay chỉ sống trong GuestHome: không lưu localStorage/URL và PoiDetail không đọc được, nên không gửi enter/exit.
  const pos=gpsPos||manualPos,usingManual=!gpsPos&&!!manualPos;
  const dest=pois.find(p=>p.id===destId);
- const findNearby=async()=>{if(!pos){setGpsMsg('gpsNeed');return}try{const d:any=await contentApi.nearby(pos[0],pos[1],radius==='all'?100000:Number(radius));setNearby((d.pois||[]).map((n:POI)=>({...pois.find((x:POI)=>x.id===n.id),...n,translations:n.translations||pois.find((x:POI)=>x.id===n.id)?.translations})));setTab('list')}catch(e){setErr(errorText(e, getLang()))}};
+ const redIds=useMemo(()=>[destId,...(nearby||[]).map(n=>n.id)].filter(Boolean) as string[],[destId,nearby]);
+ const distances=useMemo(()=>{const m:Record<string,number>={};(nearby||[]).forEach(n=>{if(n.distance_m!==undefined)m[n.id]=n.distance_m});return m},[nearby]);
+ const findNearby=async()=>{if(!pos){setGpsMsg('gpsNeed');return}try{const d:any=await contentApi.nearby(pos[0],pos[1],radius==='all'?100000:Number(radius));setNearby((d.pois||[]).map((n:POI)=>({...pois.find((x:POI)=>x.id===n.id),...n,translations:n.translations||pois.find((x:POI)=>x.id===n.id)?.translations})));setTab('map')}catch(e){setErr(errorText(e, getLang()))}};
  
- return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/><main className="guest-wrap"><section className="hero"><div className="hero-copy"><span className="eyebrow"><Leaf size={15}/> {T('eyebrow',lang)}</span><h1>{labels[lang].heroTitle1}<br/><em>{labels[lang].heroTitle2}</em></h1><p>{labels[lang].heroDesc}</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>{setTab('list');document.getElementById('explore')?.scrollIntoView({behavior:'smooth'})}}>{labels[lang].explore} <MapPin size={17}/></button><button className="btn btn-outline" onClick={()=>void openTicket()}><Ticket size={17}/> {labels[lang].myTicket}</button></div></div><div className="hero-art"><span>🌿</span><div className="hero-animal">🦒</div><span>🍃</span></div></section><section className="info-grid"><article className="info-card"><span className="info-icon">☀️</span><div><b>{T('openHours',lang)}</b><p>{T('openHoursNote',lang)}</p></div></article><article className="info-card"><span className="info-icon">📍</span><div><b>{T('address',lang)}</b><p>2 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM</p></div></article><article className="info-card"><span className="info-icon">🌱</span><div><b>{T('about',lang)}</b><p>{T('aboutNote',lang)}</p></div></article></section><section id="explore" className="explore"><div className="section-heading"><div><span className="eyebrow">{T('mapEyebrow',lang)}</span><h2>{T('whereNext',lang)}</h2><p>{T('whereNextDesc',lang)}</p></div><div className="locate-actions">{(gpsFailed||manualId)&&<select aria-label={T('ariaIAmAt',lang)} value={manualId} onChange={e=>setManualId(e.target.value)}><option value="">{T('iAmAt',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select>}<button className="btn btn-outline" onClick={()=>void findNearby()}><LocateFixed size={17}/> {labels[lang].nearMe}</button></div></div><div className="search-row"><div className="searchbox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={labels[lang].searchPh} aria-label={labels[lang].searchPh}/></div><select aria-label={T('ariaDest',lang)} value={destId} onChange={e=>{setDestId(e.target.value);setTab('map')}}><option value="">{T('chooseDest',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select><select aria-label={T('ariaRadius',lang)} value={radius} onChange={e=>setRadius(e.target.value)}><option value="100">{T('r100',lang)}</option><option value="300">{T('r300',lang)}</option><option value="500">{T('r500',lang)}</option><option value="all">{T('all',lang)}</option></select></div>{gpsMsg&&<p className="gps-note"><LocateFixed size={15}/>{T(gpsMsg,lang)}</p>}{usingManual&&<p className="gps-note"><MapPin size={15}/>{T('yourPos',lang)}: <b>{manualPoi?poiName(manualPoi,lang):''}</b>. {T('manualNote',lang)}</p>}{dest&&<><PoiCard poi={{...dest,distance_m:pos?distanceM(pos,[dest.lat,dest.lon]):undefined}}/>{!pos&&<p className="gps-note">{T('needGps',lang)}</p>}</>}<div className="tabs"><button className={tab==='map'?'active':''} onClick={()=>setTab('map')}>{T('tabMap',lang)}</button><button className={tab==='list'?'active':''} onClick={()=>setTab('list')}>{T('tabList',lang)} {nearby?`(${nearby.length})`:''}</button></div>{err&&<div className="notice error"><AlertCircle size={18}/>{err}<button onClick={()=>void load()}>{T('retry',lang)}</button></div>}{loading?<div className="skeleton large"/>:<div className="explore-content">{tab==='map'?<MapView pois={filtered} position={pos} manual={usingManual} focus={dest?[dest.lat,dest.lon]:null}/>:<div className="poi-list">{(nearby||filtered).filter(p=>!query||(poiName(p,lang)).toLowerCase().includes(query.toLowerCase())).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{tab==='map'&&<div className="poi-list map-list">{filtered.slice(0,5).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{!filtered.length&&<div className="empty"><PawPrint/><b>{T('noResults',lang)}</b><span>{T('noResultsHint',lang)}</span></div>}</div>}</section><footer>{T('footer',lang)}</footer></main>{ticketModal}</>}
+ return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/><main className="guest-wrap"><section className="hero"><div className="hero-copy"><span className="eyebrow"><Leaf size={15}/> {T('eyebrow',lang)}</span><h1>{labels[lang].heroTitle1}<br/><em>{labels[lang].heroTitle2}</em></h1><p>{labels[lang].heroDesc}</p><div className="hero-actions"><button className="btn btn-primary" onClick={()=>{setTab('list');document.getElementById('explore')?.scrollIntoView({behavior:'smooth'})}}>{labels[lang].explore} <MapPin size={17}/></button><button className="btn btn-outline" onClick={()=>void openTicket()}><Ticket size={17}/> {labels[lang].myTicket}</button></div></div><div className="hero-art"><span>🌿</span><div className="hero-animal">🦒</div><span>🍃</span></div></section><section className="info-grid"><article className="info-card"><span className="info-icon">☀️</span><div><b>{T('openHours',lang)}</b><p>{T('openHoursNote',lang)}</p></div></article><article className="info-card"><span className="info-icon">📍</span><div><b>{T('address',lang)}</b><p>2 Nguyễn Bỉnh Khiêm, Quận 1, TP.HCM</p></div></article><article className="info-card"><span className="info-icon">🌱</span><div><b>{T('about',lang)}</b><p>{T('aboutNote',lang)}</p></div></article></section><section id="explore" className="explore"><div className="section-heading"><div><span className="eyebrow">{T('mapEyebrow',lang)}</span><h2>{T('whereNext',lang)}</h2><p>{T('whereNextDesc',lang)}</p></div><div className="locate-actions">{(gpsFailed||manualId)&&<select aria-label={T('ariaIAmAt',lang)} value={manualId} onChange={e=>setManualId(e.target.value)}><option value="">{T('iAmAt',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select>}<button className="btn btn-outline" onClick={()=>void findNearby()}><LocateFixed size={17}/> {labels[lang].nearMe}</button></div></div><div className="search-row"><div className="searchbox"><Search size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={labels[lang].searchPh} aria-label={labels[lang].searchPh}/></div><select aria-label={T('ariaDest',lang)} value={destId} onChange={e=>{setDestId(e.target.value);setTab('map')}}><option value="">{T('chooseDest',lang)}</option>{spotOptions.map(p=><option key={p.id} value={p.id}>{poiName(p,lang)}</option>)}</select><select aria-label={T('ariaRadius',lang)} value={radius} onChange={e=>setRadius(e.target.value)}><option value="100">{T('r100',lang)}</option><option value="300">{T('r300',lang)}</option><option value="500">{T('r500',lang)}</option><option value="all">{T('all',lang)}</option></select></div>{gpsMsg&&<p className="gps-note"><LocateFixed size={15}/>{T(gpsMsg,lang)}</p>}{usingManual&&<p className="gps-note"><MapPin size={15}/>{T('yourPos',lang)}: <b>{manualPoi?poiName(manualPoi,lang):''}</b>. {T('manualNote',lang)}</p>}{dest&&<><PoiCard poi={{...dest,distance_m:pos?distanceM(pos,[dest.lat,dest.lon]):undefined}}/>{!pos&&<p className="gps-note">{T('needGps',lang)}</p>}</>}<div className="tabs"><button className={tab==='map'?'active':''} onClick={()=>setTab('map')}>{T('tabMap',lang)}</button><button className={tab==='list'?'active':''} onClick={()=>setTab('list')}>{T('tabList',lang)} {nearby?`(${nearby.length})`:''}</button></div>{err&&<div className="notice error"><AlertCircle size={18}/>{err}<button onClick={()=>void load()}>{T('retry',lang)}</button></div>}{loading?<div className="skeleton large"/>:<div className="explore-content">{tab==='map'?<MapView pois={filtered} position={pos} manual={usingManual} focus={dest?[dest.lat,dest.lon]:null} redIds={redIds} distances={distances} onSelect={setDestId}/>:<div className="poi-list">{(nearby||filtered).filter(p=>!query||(poiName(p,lang)).toLowerCase().includes(query.toLowerCase())).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{tab==='map'&&<div className="poi-list map-list">{filtered.slice(0,5).map(p=><PoiCard key={p.id} poi={p}/>)}</div>}{!filtered.length&&<div className="empty"><PawPrint/><b>{T('noResults',lang)}</b><span>{T('noResultsHint',lang)}</span></div>}</div>}</section><footer>{T('footer',lang)}</footer></main>{ticketModal}</>}
 function PoiCard({poi:p}:{poi:POI}){const [lang]=useLang();return <Link className="poi-card" to={`/poi/${p.id}`}><div className="poi-thumb">{p.image_url?<img src={p.image_url} alt={poiName(p,lang)} onError={e=>{e.currentTarget.style.display='none'}}/>:<span>{p.category==='chim'?'🐦':p.category==='thu_an_thit'?'🦁':p.category==='thu_an_co'?'🦒':p.category==='bo_sat_luong_cu'?'🐢':'🌿'}</span>}</div><div className="poi-card-copy"><span className="category">{catName(p.category,lang)}</span><b>{poiName(p,lang)}</b><p>{poiDesc(p,lang)||T('exploreThis',lang)}</p>{p.distance_m!==undefined&&<small><MapPin size={13}/>{p.distance_m<1000?`${Math.round(p.distance_m)} m`:`${(p.distance_m/1000).toFixed(1)} km`}</small>}</div><span className="arrow">↗</span></Link>}
 function QrScanner({
   onDetected,
@@ -411,8 +414,8 @@ function PoiDetail({ticket}:{ticket:ReturnType<typeof useTicket>}){
  const insideKeyRef = useRef('');
  const sendEvent = useCallback(async(type:string, currentPos?:[number,number]|null):Promise<boolean>=>{
    if(!ticket.valid||!ticket.token) return false;
-   if(!gpsReal) return false; // không gửi khi chọn vị trí thủ công
-   const p = currentPos ?? pos;
+   if(type !== 'listen' && !gpsReal) return false;
+   const p = gpsReal ? (currentPos ?? pos) : null;
    try{
      await contentApi.sendEvent(
        {poi_id:id, type, ...(p?{lat:p[0],lon:p[1]}:{})},
@@ -562,23 +565,48 @@ function PageTitle({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc
 
 function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
   const nav=useNavigate();
+  const isAdmin=staff.user?.role==='admin';
 
+  const getTodayVN=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Ho_Chi_Minh'});
+  const shiftDays=(dateStr:string,days:number):string=>{
+    const [y,m,d]=dateStr.split('-').map(Number);
+    const dt=new Date(y,m-1,d);
+    dt.setDate(dt.getDate()+days);
+    const yyyy=dt.getFullYear();
+    const mm=String(dt.getMonth()+1).padStart(2,'0');
+    const dd=String(dt.getDate()).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [from,setFrom]=useState(getTodayVN);
+  const [to,setTo]=useState(getTodayVN);
   const [tickets,setTickets]=useState<any[]>([]);
   const [created,setCreated]=useState<any>(null);
   const [copied,setCopied]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
+  const [cancelling,setCancelling]=useState(false);
+
+  const todayVN=getTodayVN();
+  const isToday=from===todayVN&&to===todayVN;
+  const fmtDM=(s:string)=>{const [y,m,d]=s.split('-');return d&&m?`${d}/${m}`:s;};
 
   // Tải danh sách vé
   const load=useCallback(async()=>{
+    if(isAdmin && to < from){
+      setErr('Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+      return;
+    }
     try{
-      const d:any=await authApi.tickets(staff.token);
+      const d:any=(!isAdmin || isToday)
+        ? await authApi.tickets(staff.token)
+        : await authApi.ticketsRange(from,to,staff.token);
       setTickets(d.tickets||d.items||d||[]);
       setErr('');
     }catch(e){
       handleStaffError(e,staff,nav,setErr);
     }
-  },[staff.token,nav]);
+  },[staff.token,nav,isAdmin,isToday,from,to]);
 
   // Tự động cập nhật danh sách vé mỗi 15 giây
   useEffect(()=>{
@@ -609,6 +637,23 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
       handleStaffError(e,staff,nav,setErr);
     }finally{
       setBusy(false);
+    }
+  };
+
+  const onCancel=async(t:any)=>{
+    const code=t.code||t.ticket_code||t.id;
+    if(!window.confirm(`Hủy vé ${code}? Vé sẽ không dùng được nữa.`)) return;
+    setCancelling(true);
+    try{
+      await authApi.cancelTicket(t.id,staff.token);
+      if(created&&(created.code===code||created.id===t.id)){
+        setCreated(null);
+      }
+      void load();
+    }catch(e){
+      handleStaffError(e,staff,nav,setErr);
+    }finally{
+      setCancelling(false);
     }
   };
 
@@ -686,8 +731,8 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Vé hôm nay</h2>
-            <p>Danh sách vé được tạo trong ngày.</p>
+            <h2>{isToday ? 'Vé hôm nay' : `Vé từ ${fmtDM(from)} đến ${fmtDM(to)}`}</h2>
+            <p>{isToday ? 'Danh sách vé được tạo trong ngày.' : `Danh sách vé được tạo từ ${fmtDM(from)} đến ${fmtDM(to)}.`}</p>
           </div>
 
           <button
@@ -699,11 +744,68 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
           </button>
         </div>
 
+        {isAdmin && (
+          <div className="ticket-filter-bar">
+            <div className="filter-group">
+              <label htmlFor="ticket-date-from">Từ</label>
+              <input
+                id="ticket-date-from"
+                type="date"
+                value={from}
+                onChange={e=>setFrom(e.target.value)}
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="ticket-date-to">Đến</label>
+              <input
+                id="ticket-date-to"
+                type="date"
+                value={to}
+                onChange={e=>setTo(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                setFrom(today);
+                setTo(today);
+              }}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                setFrom(shiftDays(today,-6));
+                setTo(today);
+              }}
+            >
+              7 ngày
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                const [y,m]=today.split('-');
+                setFrom(`${y}-${m}-01`);
+                setTo(today);
+              }}
+            >
+              Tháng này
+            </button>
+          </div>
+        )}
+
         {!tickets.length&&!err?(
           <div className="empty">
             <Ticket/>
-            <b>Chưa có vé nào hôm nay</b>
-            <span>Nhấn “Tạo vé mới” để bắt đầu.</span>
+            <b>{isToday ? 'Chưa có vé nào hôm nay' : 'Không có vé nào trong khoảng thời gian này'}</b>
+            <span>{isToday ? 'Nhấn “Tạo vé mới” để bắt đầu.' : 'Thử chọn khoảng ngày khác.'}</span>
           </div>
         ):(
           <div className="table-wrap">
@@ -715,6 +817,7 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
                   <th>Người tạo</th>
                   <th>Trạng thái</th>
                   <th>Hết hạn</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
 
@@ -738,7 +841,7 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
                         className={`status ${
                           String(t.status).toLowerCase().includes('activ')
                             ?'green'
-                            :String(t.status).toLowerCase().includes('expir')
+                            :(String(t.status).toLowerCase().includes('expir')||String(t.status).toLowerCase().includes('cancel'))
                               ?'red'
                               :'gray'
                         }`}
@@ -749,6 +852,18 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
 
                     <td>
                       {fmtDate(t.expires_at)}
+                    </td>
+
+                    <td>
+                      {(t.status==='unused'||t.status==='activated')?(
+                        <button
+                          className="btn btn-outline btn-small"
+                          onClick={()=>void onCancel(t)}
+                          disabled={cancelling}
+                        >
+                          Hủy vé
+                        </button>
+                      ):'—'}
                     </td>
                   </tr>
                 ))}
@@ -792,8 +907,60 @@ function PoiForm({
   ));
 
   const [err,setErr]=useState('');
+  const [msg,setMsg]=useState('');
   const [busy,setBusy]=useState(false);
+  const [translating,setTranslating]=useState(false);
   const [preview,setPreview]=useState('');
+
+  const mergeTranslations=(
+    curr:Record<string,{name:string;description:string}>,
+    result:any
+  ):Record<string,{name:string;description:string}>=>{
+    const merged:Record<string,{name:string;description:string}>={...curr};
+    const trans=result?.translations||{};
+    for(const l of ['en','zh','ja','ko']){
+      const existing=curr[l]||emptyTranslation();
+      const auto=trans[l]||{};
+      merged[l]={
+        name:existing.name.trim()?existing.name:(auto.name||''),
+        description:existing.description.trim()?existing.description:(auto.description||'')
+      };
+    }
+    return merged;
+  };
+
+  const hasEmptyTranslation=(t:Record<string,{name:string;description:string}>)=>{
+    return ['en','zh','ja','ko'].some(
+      l=>!t[l]?.name?.trim()||!t[l]?.description?.trim()
+    );
+  };
+
+  const handleAutoTranslate=async()=>{
+    if(!translations.vi.name.trim()||!translations.vi.description.trim()){
+      setErr('Vui lòng nhập tên và mô tả tiếng Việt.');
+      setMsg('');
+      return;
+    }
+    setTranslating(true);
+    setErr('');
+    setMsg('');
+    try{
+      const res:any=await contentApi.translate(
+        {name:translations.vi.name.trim(),description:translations.vi.description.trim()},
+        token
+      );
+      setTranslations(o=>mergeTranslations(o,res));
+      setMsg('Đã điền bản dịch vào các ô còn trống, hãy kiểm tra lại');
+    }catch(e){
+      if(e instanceof ApiError&&e.status===401){
+        onUnauthorized();
+      }else{
+        setErr(errorText(e,getLang()));
+      }
+    }finally{
+      setTranslating(false);
+    }
+  };
 
   // Cập nhật tên và mô tả theo ngôn ngữ
   const update=(
@@ -832,10 +999,30 @@ function PoiForm({
 
     setBusy(true);
     setErr('');
+    setMsg('');
+
+    let currentTranslations=translations;
+    if(hasEmptyTranslation(currentTranslations)){
+      try{
+        const res:any=await contentApi.translate(
+          {name:currentTranslations.vi.name.trim(),description:currentTranslations.vi.description.trim()},
+          token
+        );
+        const merged=mergeTranslations(currentTranslations,res);
+        currentTranslations=merged;
+        setTranslations(merged);
+      }catch(e){
+        if(e instanceof ApiError&&e.status===401){
+          onUnauthorized();
+          setBusy(false);
+          return;
+        }
+      }
+    }
 
     try{
       const body={
-        name:translations.vi.name,
+        name:currentTranslations.vi.name,
         category,
         species_name:species||null,
         image_url:image||null,
@@ -843,7 +1030,7 @@ function PoiForm({
         lon:Number(lon),
         radius_m:Number(radius),
         translations:Object.fromEntries(
-          Object.entries(translations).filter(
+          Object.entries(currentTranslations).filter(
             ([_,v])=>v.name.trim()&&v.description.trim()
           )
         )
@@ -1019,16 +1206,26 @@ function PoiForm({
           </p>
         </div>
 
-        <div className="lang-tabs">
+        <div className="lang-tabs" style={{alignItems:'center'}}>
           {languages.map(l=>(
             <button
               key={l}
+              type="button"
               className={lang===l?'selected':''}
               onClick={()=>setLang(l)}
             >
               {l.toUpperCase()}
             </button>
           ))}
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            style={{marginLeft:'auto'}}
+            onClick={()=>void handleAutoTranslate()}
+            disabled={translating||busy}
+          >
+            {translating?'Đang dịch…':'Dịch tự động từ tiếng Việt'}
+          </button>
         </div>
 
         <label>
@@ -1059,6 +1256,12 @@ function PoiForm({
         </button>
 
         {preview&&<audio controls src={preview}/>}
+
+        {msg&&(
+          <div className="notice success">
+            {msg}
+          </div>
+        )}
 
         {err&&(
           <div className="notice error">

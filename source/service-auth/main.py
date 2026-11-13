@@ -32,16 +32,20 @@ from jwt_auth import (
     JWT_SECRET,
     VALID_ROLES,
     get_current_staff,
+    invalidate_ticket_cache,
     require_roles,
     require_valid_ticket,
     set_ticket_lookup,
 )
 from tickets import (
+    VN_TZ,
     activate_ticket,
     activation_url,
     check_activate_rate_limit,
     create_ticket_doc,
+    now_vn,
     serialize_ticket,
+    ticket_status,
     to_iso,
     vn_day_bounds,
 )
@@ -215,6 +219,35 @@ class ActivateTicketRequest(BaseModel):
     )
 
 
+async def _check_user_active(payload: dict) -> dict:
+    """Tra DB theo payload['sub']; 401 nếu không tìm thấy hoặc tài khoản bị khóa."""
+    user = await get_db()["users"].find_one({"id": payload.get("sub")})
+    if not user:
+        raise HTTPException(status_code=401, detail="Token không hợp lệ")
+    if not user.get("is_active", True):
+        raise HTTPException(status_code=401, detail="Tài khoản đã bị khóa")
+    return payload
+
+
+async def get_active_staff(payload: dict = Depends(get_current_staff)) -> dict:
+    """Xác thực staff token VÀ kiểm tra tài khoản còn hoạt động trong DB."""
+    return await _check_user_active(payload)
+
+
+def require_active_roles(*roles: str):
+    """Kiểm tra role (403) TRƯỚC, sau đó mới tra DB (401) — giữ behaviour 403 cho sai role."""
+
+    async def _check(payload: dict = Depends(get_current_staff)) -> dict:
+        if payload.get("role") not in roles:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Chỉ {'/'.join(roles)} mới có quyền thực hiện thao tác này",
+            )
+        return await _check_user_active(payload)
+
+    return _check
+
+
 def require_internal(x_internal_key: Optional[str] = Header(default=None, alias="X-Internal-Key")):
     if x_internal_key != INTERNAL_SERVICE_KEY:
         raise HTTPException(status_code=401, detail="Internal key không hợp lệ")
@@ -270,7 +303,7 @@ async def login(request: LoginRequest):
 
 
 @app.get("/me")
-async def get_me(payload: dict = Depends(get_current_staff)):
+async def get_me(payload: dict = Depends(get_active_staff)):
     db = get_db()
     user = await db["users"].find_one({"username": payload["username"]})
     if not user:
@@ -279,14 +312,14 @@ async def get_me(payload: dict = Depends(get_current_staff)):
 
 
 @app.get("/users")
-async def list_users(_: dict = Depends(require_roles("admin"))):
+async def list_users(_: dict = Depends(require_active_roles("admin"))):
     db = get_db()
     users = await db["users"].find({}).to_list(length=500)
     return {"total": len(users), "users": [serialize_user(u) for u in users]}
 
 
 @app.post("/users", status_code=201)
-async def create_user(data: UserCreate, payload: dict = Depends(require_roles("admin"))):
+async def create_user(data: UserCreate, payload: dict = Depends(require_active_roles("admin"))):
     if data.role not in VALID_ROLES:
         raise HTTPException(status_code=400, detail=f"Role không hợp lệ. Chọn: {sorted(VALID_ROLES)}")
 
@@ -315,7 +348,7 @@ async def create_user(data: UserCreate, payload: dict = Depends(require_roles("a
 async def set_user_status(
     user_id: str,
     body: UserStatusUpdate,
-    payload: dict = Depends(require_roles("admin")),
+    payload: dict = Depends(require_active_roles("admin")),
 ):
     db = get_db()
     target = await db["users"].find_one({"id": user_id})
@@ -330,7 +363,7 @@ async def set_user_status(
 
 
 @app.post("/tickets", status_code=201)
-async def create_ticket(staff: dict = Depends(require_roles("counter", "admin"))):
+async def create_ticket(staff: dict = Depends(require_active_roles("counter", "admin"))):
     ticket = await create_ticket_doc(get_db(), staff["username"])
     return {
         **serialize_ticket(ticket),
@@ -339,12 +372,93 @@ async def create_ticket(staff: dict = Depends(require_roles("counter", "admin"))
 
 
 @app.get("/tickets/today")
-async def list_tickets_today(_: dict = Depends(require_roles("counter", "admin"))):
+async def list_tickets_today(_: dict = Depends(require_active_roles("counter", "admin"))):
     db = get_db()
     start, end = vn_day_bounds()
     docs = await db["tickets"].find({"created_at": {"$gte": start, "$lte": end}}).to_list(length=2000)
     docs.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
     return {"total": len(docs), "tickets": [serialize_ticket(t) for t in docs]}
+
+
+@app.get("/tickets")
+async def list_tickets(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    _: dict = Depends(require_active_roles("admin")),
+):
+    today_vn = now_vn().strftime("%Y-%m-%d")
+    date_from = date_from or today_vn
+    date_to = date_to or today_vn
+
+    try:
+        d_from = datetime.strptime(date_from, "%Y-%m-%d").date()
+        d_to = datetime.strptime(date_to, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Định dạng ngày không hợp lệ, yêu cầu YYYY-MM-DD")
+
+    if d_to < d_from:
+        raise HTTPException(status_code=400, detail="date_to không được nhỏ hơn date_from")
+
+    if (d_to - d_from).days > 93:
+        raise HTTPException(status_code=400, detail="Khoảng thời gian không được vượt quá 93 ngày")
+
+    start, _ = vn_day_bounds(datetime(d_from.year, d_from.month, d_from.day, tzinfo=VN_TZ))
+    _, end = vn_day_bounds(datetime(d_to.year, d_to.month, d_to.day, tzinfo=VN_TZ))
+
+    db = get_db()
+    docs = await db["tickets"].find({"created_at": {"$gte": start, "$lte": end}}).to_list(length=2000)
+    docs.sort(key=lambda t: t.get("created_at") or now_utc(), reverse=True)
+    return {
+        "total": len(docs),
+        "tickets": [serialize_ticket(t) for t in docs],
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+
+
+@app.post("/tickets/{ticket_id}/cancel")
+async def cancel_ticket(
+    ticket_id: str,
+    staff: dict = Depends(require_active_roles("counter", "admin")),
+):
+    db = get_db()
+    ticket = await db["tickets"].find_one({"id": ticket_id})
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Không tìm thấy vé")
+
+    if staff.get("role") == "counter":
+        start_today, end_today = vn_day_bounds()
+        created = ticket.get("created_at")
+        if created:
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            created_vn = created.astimezone(VN_TZ)
+            if not (start_today <= created_vn <= end_today):
+                raise HTTPException(status_code=403, detail="Nhân viên quầy chỉ được hủy vé tạo trong ngày hôm nay")
+        else:
+            raise HTTPException(status_code=403, detail="Nhân viên quầy chỉ được hủy vé tạo trong ngày hôm nay")
+
+    status = ticket_status(ticket)
+    if status == "cancelled":
+        raise HTTPException(status_code=409, detail="Vé đã bị hủy trước đó")
+
+    if status == "expired":
+        raise HTTPException(status_code=400, detail="Vé đã hết hạn")
+
+    now = now_vn()
+    await db["tickets"].update_one(
+        {"id": ticket_id},
+        {
+            "$set": {
+                "cancelled_at": now,
+                "cancelled_by": staff["username"],
+                "expires_at": now,
+            }
+        },
+    )
+    invalidate_ticket_cache(ticket_id)
+    updated = await db["tickets"].find_one({"id": ticket_id})
+    return serialize_ticket(updated)
 
 
 @app.post("/tickets/activate")
@@ -381,6 +495,7 @@ async def internal_tickets_created_between(
     """Vé có start <= created_at < end -> [{id, created_at}] (Content dùng cho thống kê)."""
     db = get_db()
     docs = await db["tickets"].find({"created_at": {"$gte": start, "$lt": end}}).to_list(length=None)
+    docs = [d for d in docs if not d.get("cancelled_at")]
     return {"tickets": [{"id": d.get("id"), "created_at": to_iso(d.get("created_at"))} for d in docs]}
 
 
