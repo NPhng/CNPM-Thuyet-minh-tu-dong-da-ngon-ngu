@@ -76,6 +76,8 @@ def generate_ticket_code() -> str:
 
 
 def ticket_status(ticket: dict, at: Optional[datetime] = None) -> str:
+    if ticket.get("cancelled_at"):
+        return "cancelled"
     at = at or now_vn()
     expires = ticket["expires_at"]
     if expires.tzinfo is None:
@@ -106,6 +108,7 @@ STATUS_LABELS = {
     "unused": "chưa kích hoạt",
     "activated": "đã kích hoạt",
     "expired": "hết hạn",
+    "cancelled": "đã hủy",
 }
 
 
@@ -121,6 +124,7 @@ def serialize_ticket(ticket: dict) -> dict:
         "status_label": STATUS_LABELS[status],
         "device_id": ticket.get("device_id"),
         "activated_at": to_iso(ticket.get("activated_at")),
+        "cancelled_at": to_iso(ticket.get("cancelled_at")),
         "token_version": ticket.get("token_version", 0),
     }
 
@@ -165,6 +169,9 @@ async def activate_ticket(db, code: str, device_id: str, confirm_device_switch: 
     ticket = await db["tickets"].find_one({"code": code})
     if not ticket:
         ticket_error(404, "invalid_code", "Mã vé không đúng")
+
+    if ticket.get("cancelled_at"):
+        ticket_error(410, "ticket_cancelled", "Vé đã bị hủy")
 
     if ticket_status(ticket) == "expired":
         ticket_error(410, "expired", "Vé đã hết hạn")
