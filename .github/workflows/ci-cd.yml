@@ -86,11 +86,12 @@ jobs:
       - name: Prepare environment file
         working-directory: source
         run: |
-          cp .env.example .env
-          echo "JWT_SECRET=ci-dummy-jwt-secret-at-least-32-chars-long" >> .env
-          echo "INTERNAL_SERVICE_KEY=ci-dummy-internal-service-key" >> .env
-          echo "ADMIN_PASSWORD=ci-dummy-admin-password" >> .env
-          echo "COUNTER_PASSWORD=ci-dummy-counter-password" >> .env
+          {
+            echo "JWT_SECRET=ci-dummy-jwt-secret-at-least-32-chars-long"
+            echo "INTERNAL_SERVICE_KEY=ci-dummy-internal-service-key"
+            echo "ADMIN_PASSWORD=ci-dummy-admin-password"
+            echo "COUNTER_PASSWORD=ci-dummy-counter-password"
+          } > .env
 
       - name: Build Docker Compose services
         working-directory: source
