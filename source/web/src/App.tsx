@@ -565,23 +565,48 @@ function PageTitle({eyebrow,title,desc,action}:{eyebrow:string;title:string;desc
 
 function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
   const nav=useNavigate();
+  const isAdmin=staff.user?.role==='admin';
 
+  const getTodayVN=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Ho_Chi_Minh'});
+  const shiftDays=(dateStr:string,days:number):string=>{
+    const [y,m,d]=dateStr.split('-').map(Number);
+    const dt=new Date(y,m-1,d);
+    dt.setDate(dt.getDate()+days);
+    const yyyy=dt.getFullYear();
+    const mm=String(dt.getMonth()+1).padStart(2,'0');
+    const dd=String(dt.getDate()).padStart(2,'0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [from,setFrom]=useState(getTodayVN);
+  const [to,setTo]=useState(getTodayVN);
   const [tickets,setTickets]=useState<any[]>([]);
   const [created,setCreated]=useState<any>(null);
   const [copied,setCopied]=useState(false);
   const [err,setErr]=useState('');
   const [busy,setBusy]=useState(false);
+  const [cancelling,setCancelling]=useState(false);
+
+  const todayVN=getTodayVN();
+  const isToday=from===todayVN&&to===todayVN;
+  const fmtDM=(s:string)=>{const [y,m,d]=s.split('-');return d&&m?`${d}/${m}`:s;};
 
   // Tải danh sách vé
   const load=useCallback(async()=>{
+    if(isAdmin && to < from){
+      setErr('Ngày kết thúc không được nhỏ hơn ngày bắt đầu.');
+      return;
+    }
     try{
-      const d:any=await authApi.tickets(staff.token);
+      const d:any=(!isAdmin || isToday)
+        ? await authApi.tickets(staff.token)
+        : await authApi.ticketsRange(from,to,staff.token);
       setTickets(d.tickets||d.items||d||[]);
       setErr('');
     }catch(e){
       handleStaffError(e,staff,nav,setErr);
     }
-  },[staff.token,nav]);
+  },[staff.token,nav,isAdmin,isToday,from,to]);
 
   // Tự động cập nhật danh sách vé mỗi 15 giây
   useEffect(()=>{
@@ -612,6 +637,23 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
       handleStaffError(e,staff,nav,setErr);
     }finally{
       setBusy(false);
+    }
+  };
+
+  const onCancel=async(t:any)=>{
+    const code=t.code||t.ticket_code||t.id;
+    if(!window.confirm(`Hủy vé ${code}? Vé sẽ không dùng được nữa.`)) return;
+    setCancelling(true);
+    try{
+      await authApi.cancelTicket(t.id,staff.token);
+      if(created&&(created.code===code||created.id===t.id)){
+        setCreated(null);
+      }
+      void load();
+    }catch(e){
+      handleStaffError(e,staff,nav,setErr);
+    }finally{
+      setCancelling(false);
     }
   };
 
@@ -689,8 +731,8 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
       <section className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Vé hôm nay</h2>
-            <p>Danh sách vé được tạo trong ngày.</p>
+            <h2>{isToday ? 'Vé hôm nay' : `Vé từ ${fmtDM(from)} đến ${fmtDM(to)}`}</h2>
+            <p>{isToday ? 'Danh sách vé được tạo trong ngày.' : `Danh sách vé được tạo từ ${fmtDM(from)} đến ${fmtDM(to)}.`}</p>
           </div>
 
           <button
@@ -702,11 +744,68 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
           </button>
         </div>
 
+        {isAdmin && (
+          <div className="ticket-filter-bar">
+            <div className="filter-group">
+              <label htmlFor="ticket-date-from">Từ</label>
+              <input
+                id="ticket-date-from"
+                type="date"
+                value={from}
+                onChange={e=>setFrom(e.target.value)}
+              />
+            </div>
+            <div className="filter-group">
+              <label htmlFor="ticket-date-to">Đến</label>
+              <input
+                id="ticket-date-to"
+                type="date"
+                value={to}
+                onChange={e=>setTo(e.target.value)}
+              />
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                setFrom(today);
+                setTo(today);
+              }}
+            >
+              Hôm nay
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                setFrom(shiftDays(today,-6));
+                setTo(today);
+              }}
+            >
+              7 ngày
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline btn-small"
+              onClick={()=>{
+                const today=getTodayVN();
+                const [y,m]=today.split('-');
+                setFrom(`${y}-${m}-01`);
+                setTo(today);
+              }}
+            >
+              Tháng này
+            </button>
+          </div>
+        )}
+
         {!tickets.length&&!err?(
           <div className="empty">
             <Ticket/>
-            <b>Chưa có vé nào hôm nay</b>
-            <span>Nhấn “Tạo vé mới” để bắt đầu.</span>
+            <b>{isToday ? 'Chưa có vé nào hôm nay' : 'Không có vé nào trong khoảng thời gian này'}</b>
+            <span>{isToday ? 'Nhấn “Tạo vé mới” để bắt đầu.' : 'Thử chọn khoảng ngày khác.'}</span>
           </div>
         ):(
           <div className="table-wrap">
@@ -718,6 +817,7 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
                   <th>Người tạo</th>
                   <th>Trạng thái</th>
                   <th>Hết hạn</th>
+                  <th>Thao tác</th>
                 </tr>
               </thead>
 
@@ -741,7 +841,7 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
                         className={`status ${
                           String(t.status).toLowerCase().includes('activ')
                             ?'green'
-                            :String(t.status).toLowerCase().includes('expir')
+                            :(String(t.status).toLowerCase().includes('expir')||String(t.status).toLowerCase().includes('cancel'))
                               ?'red'
                               :'gray'
                         }`}
@@ -752,6 +852,18 @@ function StaffTickets({staff}:{staff:ReturnType<typeof useStaff>}){
 
                     <td>
                       {fmtDate(t.expires_at)}
+                    </td>
+
+                    <td>
+                      {(t.status==='unused'||t.status==='activated')?(
+                        <button
+                          className="btn btn-outline btn-small"
+                          onClick={()=>void onCancel(t)}
+                          disabled={cancelling}
+                        >
+                          Hủy vé
+                        </button>
+                      ):'—'}
                     </td>
                   </tr>
                 ))}

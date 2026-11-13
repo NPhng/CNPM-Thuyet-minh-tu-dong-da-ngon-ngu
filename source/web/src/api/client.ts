@@ -50,6 +50,8 @@ export async function request<T=any>(service:Service,path:string,opts:RequestIni
 export const authApi={
   login:(body:any)=>request('auth','/login',{method:'POST',body:JSON.stringify(body)}),
   tickets:(token:string)=>request('auth','/tickets/today',{},token),
+  ticketsRange:(from:string,to:string,token:string)=>request('auth',`/tickets?date_from=${from}&date_to=${to}`,{},token),
+  cancelTicket:(id:string,token:string)=>request('auth',`/tickets/${encodeURIComponent(id)}/cancel`,{method:'POST'},token),
   createTicket:(token:string)=>request('auth','/tickets',{method:'POST'},token),
   activate:(body:any)=>request('auth','/tickets/activate',{method:'POST',body:JSON.stringify(body)}),
   meTicket:(token:string)=>request('auth','/tickets/me',{},token),
