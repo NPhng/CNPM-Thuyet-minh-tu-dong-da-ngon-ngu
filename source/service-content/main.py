@@ -397,26 +397,8 @@ async def translate_poi(
         raise HTTPException(status_code=400, detail="Mô tả không được vượt quá 4500 ký tự")
 
     async def _do_translations():
-        tasks = [
-            asyncio.to_thread(translator.translate_text, name, "en"),
-            asyncio.to_thread(translator.translate_text, desc, "en"),
-            asyncio.to_thread(translator.translate_text, name, "zh"),
-            asyncio.to_thread(translator.translate_text, desc, "zh"),
-            asyncio.to_thread(translator.translate_text, name, "ja"),
-            asyncio.to_thread(translator.translate_text, desc, "ja"),
-            asyncio.to_thread(translator.translate_text, name, "ko"),
-            asyncio.to_thread(translator.translate_text, desc, "ko"),
-        ]
-        res = await asyncio.gather(*tasks)
-        return {
-            "translations": {
-                "en": {"name": res[0], "description": res[1]},
-                "zh": {"name": res[2], "description": res[3]},
-                "ja": {"name": res[4], "description": res[5]},
-                "ko": {"name": res[6], "description": res[7]},
-            }
-        }
-
+        result = await asyncio.to_thread(translator.translate_poi, name, desc)
+        return {"translations": result}
     try:
         return await asyncio.wait_for(_do_translations(), timeout=25)
     except Exception as exc:
