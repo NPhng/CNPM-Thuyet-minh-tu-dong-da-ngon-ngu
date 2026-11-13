@@ -907,8 +907,60 @@ function PoiForm({
   ));
 
   const [err,setErr]=useState('');
+  const [msg,setMsg]=useState('');
   const [busy,setBusy]=useState(false);
+  const [translating,setTranslating]=useState(false);
   const [preview,setPreview]=useState('');
+
+  const mergeTranslations=(
+    curr:Record<string,{name:string;description:string}>,
+    result:any
+  ):Record<string,{name:string;description:string}>=>{
+    const merged:Record<string,{name:string;description:string}>={...curr};
+    const trans=result?.translations||{};
+    for(const l of ['en','zh','ja','ko']){
+      const existing=curr[l]||emptyTranslation();
+      const auto=trans[l]||{};
+      merged[l]={
+        name:existing.name.trim()?existing.name:(auto.name||''),
+        description:existing.description.trim()?existing.description:(auto.description||'')
+      };
+    }
+    return merged;
+  };
+
+  const hasEmptyTranslation=(t:Record<string,{name:string;description:string}>)=>{
+    return ['en','zh','ja','ko'].some(
+      l=>!t[l]?.name?.trim()||!t[l]?.description?.trim()
+    );
+  };
+
+  const handleAutoTranslate=async()=>{
+    if(!translations.vi.name.trim()||!translations.vi.description.trim()){
+      setErr('Vui lòng nhập tên và mô tả tiếng Việt.');
+      setMsg('');
+      return;
+    }
+    setTranslating(true);
+    setErr('');
+    setMsg('');
+    try{
+      const res:any=await contentApi.translate(
+        {name:translations.vi.name.trim(),description:translations.vi.description.trim()},
+        token
+      );
+      setTranslations(o=>mergeTranslations(o,res));
+      setMsg('Đã điền bản dịch vào các ô còn trống, hãy kiểm tra lại');
+    }catch(e){
+      if(e instanceof ApiError&&e.status===401){
+        onUnauthorized();
+      }else{
+        setErr(errorText(e,getLang()));
+      }
+    }finally{
+      setTranslating(false);
+    }
+  };
 
   // Cập nhật tên và mô tả theo ngôn ngữ
   const update=(
@@ -947,10 +999,30 @@ function PoiForm({
 
     setBusy(true);
     setErr('');
+    setMsg('');
+
+    let currentTranslations=translations;
+    if(hasEmptyTranslation(currentTranslations)){
+      try{
+        const res:any=await contentApi.translate(
+          {name:currentTranslations.vi.name.trim(),description:currentTranslations.vi.description.trim()},
+          token
+        );
+        const merged=mergeTranslations(currentTranslations,res);
+        currentTranslations=merged;
+        setTranslations(merged);
+      }catch(e){
+        if(e instanceof ApiError&&e.status===401){
+          onUnauthorized();
+          setBusy(false);
+          return;
+        }
+      }
+    }
 
     try{
       const body={
-        name:translations.vi.name,
+        name:currentTranslations.vi.name,
         category,
         species_name:species||null,
         image_url:image||null,
@@ -958,7 +1030,7 @@ function PoiForm({
         lon:Number(lon),
         radius_m:Number(radius),
         translations:Object.fromEntries(
-          Object.entries(translations).filter(
+          Object.entries(currentTranslations).filter(
             ([_,v])=>v.name.trim()&&v.description.trim()
           )
         )
@@ -1134,16 +1206,26 @@ function PoiForm({
           </p>
         </div>
 
-        <div className="lang-tabs">
+        <div className="lang-tabs" style={{alignItems:'center'}}>
           {languages.map(l=>(
             <button
               key={l}
+              type="button"
               className={lang===l?'selected':''}
               onClick={()=>setLang(l)}
             >
               {l.toUpperCase()}
             </button>
           ))}
+          <button
+            type="button"
+            className="btn btn-outline btn-small"
+            style={{marginLeft:'auto'}}
+            onClick={()=>void handleAutoTranslate()}
+            disabled={translating||busy}
+          >
+            {translating?'Đang dịch…':'Dịch tự động từ tiếng Việt'}
+          </button>
         </div>
 
         <label>
@@ -1174,6 +1256,12 @@ function PoiForm({
         </button>
 
         {preview&&<audio controls src={preview}/>}
+
+        {msg&&(
+          <div className="notice success">
+            {msg}
+          </div>
+        )}
 
         {err&&(
           <div className="notice error">

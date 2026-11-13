@@ -68,6 +68,7 @@ export const contentApi={
   updatePoi:(id:string,body:any,t:string)=>request('content',`/pois/${id}`,{method:'PUT',body:JSON.stringify(body)},t),
   patchTranslation:(id:string,lang:string,body:any,t:string)=>request('content',`/pois/${id}/translations/${lang}`,{method:'PATCH',body:JSON.stringify(body)},t),
   deletePoi:(id:string,t:string)=>request('content',`/pois/${id}`,{method:'DELETE'},t),
+  translate:(body:any,t:string)=>request('content','/translate',{method:'POST',body:JSON.stringify(body)},t),
   dashboard:(t:string)=>request('content','/stats/dashboard',{},t),
   events:(t:string)=>request('content','/events?limit=20',{},t),
   sendEvent:(body:{poi_id:string;type:string;lat?:number;lon?:number},t:string):Promise<any>=>
