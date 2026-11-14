@@ -7,7 +7,7 @@
 
 Đồ án môn Công nghệ Phần mềm - Khoa Công nghệ Thông tin, Trường Đại học Sài Gòn.
 
-| STT | Họ và tên | MSSV | Vai trò |
+| STT | Họ và tên | MSSV |
 |---|---|---|---|
 | 1 | Trần Công Minh Trang | 3124411318 |
 | 2 | Đặng Huỳnh Ngọc Phượng | 3124411243 | 
