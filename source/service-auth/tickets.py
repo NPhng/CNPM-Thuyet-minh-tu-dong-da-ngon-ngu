@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 VN_TZ = ZoneInfo("Asia/Ho_Chi_Minh")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "http://localhost").rstrip("/")
 TICKET_TTL = os.getenv("TICKET_TTL", "end_of_day")
+ACTIVATED_TICKET_TTL_SECONDS = int(os.getenv("ACTIVATED_TICKET_TTL_SECONDS", "60"))
 ACTIVATE_RATE_LIMIT = int(os.getenv("ACTIVATE_RATE_LIMIT", "20"))
 ACTIVATE_IP_RATE_LIMIT = int(os.getenv("ACTIVATE_IP_RATE_LIMIT", "300"))
 ACTIVATE_RATE_WINDOW_SEC = int(os.getenv("ACTIVATE_RATE_WINDOW_SEC", "60"))
@@ -189,9 +190,17 @@ async def activate_ticket(db, code: str, device_id: str, confirm_device_switch: 
 
     now = now_vn()
     if not bound:
+        new_expires_at = now + timedelta(seconds=ACTIVATED_TICKET_TTL_SECONDS)
         res = await db["tickets"].update_one(
             {"id": ticket["id"], "device_id": None},
-            {"$set": {"device_id": device_id, "activated_at": now, "token_version": 1}},
+            {
+                "$set": {
+                    "device_id": device_id,
+                    "activated_at": now,
+                    "token_version": 1,
+                    "expires_at": new_expires_at,
+                }
+            },
         )
         if res.matched_count == 0:
             fresh = await db["tickets"].find_one({"id": ticket["id"]})

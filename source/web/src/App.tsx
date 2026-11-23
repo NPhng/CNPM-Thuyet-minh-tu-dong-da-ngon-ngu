@@ -334,6 +334,51 @@ function Activate({ticket}:{ticket:ReturnType<typeof useTicket>}){
 const [scanOpen, setScanOpen] = useState(false);
 const [scanError, setScanError] = useState('');
 
+const submit = useCallback(async (
+  switchDevice = false,
+  skipReplaceAsk = false,
+  overrideCode?: string
+) => {
+  const codeToSubmit = (overrideCode ?? code).replace(/\s/g, '').toUpperCase();
+  if (!codeToSubmit) return;
+
+  if (ticket.valid && !skipReplaceAsk) {
+    setReplaceAsk(true);
+    return;
+  }
+
+  setBusy(true);
+  setErr('');
+  try {
+    const d: any = await authApi.activate({
+      code: codeToSubmit,
+      device_id: deviceId(),
+      confirm_device_switch: switchDevice,
+    });
+    ticket.save(d.ticket_token || d.token, d.expires_at);
+    setExpiry(d.expires_at || '');
+    setSuccess(true);
+    setConfirm(false);
+  } catch (e: any) {
+    if (
+      e instanceof ApiError &&
+      e.status === 409 &&
+      (e.code === 'used_on_other_device' ||
+        String(e.message).includes('confirm_required'))
+    ) {
+      setConfirm(true);
+    } else if (e instanceof ApiError && e.status === 404)
+      setErr('errTicketInvalid');
+    else if (e instanceof ApiError && e.status === 410)
+      setErr('errTicketExpired');
+    else if (e instanceof ApiError && e.status === 429)
+      setErr('errTooMany');
+    else setErr(errorText(e, getLang()));
+  } finally {
+    setBusy(false);
+  }
+}, [code, ticket]);
+
 const handleQrDetected = useCallback((raw: string) => {
   const extracted = extractTicketCode(raw);
 
@@ -347,17 +392,9 @@ const handleQrDetected = useCallback((raw: string) => {
   setErr('');
   setScanError('');
   setScanOpen(false);
-}, []);
-const submit = async (
-  switchDevice = false,
-  skipReplaceAsk = false
-) => {
-  if (ticket.valid && !skipReplaceAsk) {
-    setReplaceAsk(true);
-    return;
-  }
-
-  setBusy(true);setErr('');try{const d:any=await authApi.activate({code:code.replace(/\s/g,'').toUpperCase(),device_id:deviceId(),confirm_device_switch:switchDevice});ticket.save(d.ticket_token||d.token,d.expires_at);setExpiry(d.expires_at||'');setSuccess(true);setConfirm(false)}catch(e:any){if(e instanceof ApiError&&e.status===409&&(e.code==='used_on_other_device'||String(e.message).includes('confirm_required'))){setConfirm(true)}else if(e instanceof ApiError&&e.status===404)setErr('errTicketInvalid');else if(e instanceof ApiError&&e.status===410)setErr('errTicketExpired');else if(e instanceof ApiError&&e.status===429)setErr('errTooMany');else setErr(errorText(e, getLang()))}finally{setBusy(false)}};useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">{T('backHome',lang)}</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>{T('successTitle',lang)}</h1><p>{T('successDesc',lang)}</p>{expiry&&<p>{T('expires',lang)} <b>{fmtDate(expiry,lang)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>{T('goHome',lang)}</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>{T('goListen',lang)}</button></>:<><span className="eyebrow">{T('unlockEyebrow',lang)}</span><h1>{T('activateTitle',lang)}</h1><p>{T('activateDesc',lang)}</p><label htmlFor="ticket-code">{T('ticketCode',lang)}</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder={T('ticketCodePh',lang)} autoComplete="off"/><button type="button" className="btn btn-outline full" onClick={()=>{setScanError('');setScanOpen(true)}}><Camera size={17}/> {T('scanQr',lang)}</button>{scanError&&<div className="notice error" role="alert"><AlertCircle/>{T(scanError,lang)}</div>}{err&&<div className="notice error"><AlertCircle/>{T(err,lang)}<button onClick={()=>void submit(false,true)}>{T('retry',lang)}</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?T('activating',lang):labels[lang].activate}</button><p className="fine-print"><LockKeyhole size={14}/> {T('oneDeviceNote',lang)}</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>{T('switchTitle',lang)}</h2><p>{T('switchDesc',lang)}</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>{T('cancel',lang)}</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>{T('confirmSwitch',lang)}</button></div></section></div>}
+  void submit(false, false, extracted);
+}, [submit]);
+useEffect(()=>{if(params.get('code'))void submit(false)},[]);return <><Header hasTicket={ticket.valid} onTicket={onHeaderTicket}/>{ticketModal}<main className="auth-page"><Link to="/" className="back-link">{T('backHome',lang)}</Link><section className="auth-card"><div className="auth-illustration">🎟️<span>🌿</span></div>{success?<><div className="success-round"><CheckCircle/></div><h1>{T('successTitle',lang)}</h1><p>{T('successDesc',lang)}</p>{expiry&&<p>{T('expires',lang)} <b>{fmtDate(expiry,lang)}</b></p>}<button className="btn btn-primary full" onClick={()=>nav('/')}>{T('goHome',lang)}</button><button className="btn btn-outline full" onClick={()=>nav('/poi/tcv-001')}>{T('goListen',lang)}</button></>:<><span className="eyebrow">{T('unlockEyebrow',lang)}</span><h1>{T('activateTitle',lang)}</h1><p>{T('activateDesc',lang)}</p><label htmlFor="ticket-code">{T('ticketCode',lang)}</label><input id="ticket-code" className="field code-field" value={code} onChange={e=>setCode(e.target.value.replace(/\s/g,'').toUpperCase())} placeholder={T('ticketCodePh',lang)} autoComplete="off"/><button type="button" className="btn btn-outline full" onClick={()=>{setScanError('');setScanOpen(true)}}><Camera size={17}/> {T('scanQr',lang)}</button>{scanError&&<div className="notice error" role="alert"><AlertCircle/>{T(scanError,lang)}</div>}{err&&<div className="notice error"><AlertCircle/>{T(err,lang)}<button onClick={()=>void submit(false,true)}>{T('retry',lang)}</button></div>}<button className="btn btn-primary full" disabled={busy||!code.trim()} onClick={()=>void submit()}>{busy?T('activating',lang):labels[lang].activate}</button><p className="fine-print"><LockKeyhole size={14}/> {T('oneDeviceNote',lang)}</p></>}</section></main>{confirm&&<div className="modal-backdrop"><section className="modal"><h2>{T('switchTitle',lang)}</h2><p>{T('switchDesc',lang)}</p><div className="modal-actions"><button className="btn btn-outline" onClick={()=>setConfirm(false)}>{T('cancel',lang)}</button><button className="btn btn-primary" onClick={()=>void submit(true,true)}>{T('confirmSwitch',lang)}</button></div></section></div>}
 {replaceAsk && (
   <div className="modal-backdrop">
     <section className="modal">
