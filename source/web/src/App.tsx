@@ -1,6 +1,6 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Routes,Route,Link,useNavigate,useParams,useSearchParams,Navigate} from 'react-router-dom';
-import {MapContainer,TileLayer,Marker,Popup,Circle,Tooltip as LeafletTooltip,useMap,useMapEvents} from 'react-leaflet';
+import {MapContainer,TileLayer,Marker,Popup,Circle,CircleMarker,Tooltip as LeafletTooltip,useMap,useMapEvents} from 'react-leaflet';
 import L from 'leaflet'; import {QRCodeSVG} from 'qrcode.react'; import {BarChart,Bar,LineChart,Line,XAxis,YAxis,CartesianGrid,Tooltip,ResponsiveContainer,Legend} from 'recharts';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
@@ -883,7 +883,7 @@ function PoiForm({
   poi:POI|null;
   token:string;
   onClose:()=>void;
-  onSaved:()=>void;
+  onSaved:(created?:POI)=>void;
   onUnauthorized:()=>void;
 }){
   const [name,setName]=useState(
@@ -1056,7 +1056,10 @@ function PoiForm({
         }
 
       }else{
-        await contentApi.createPoi(body,token);
+        const {poi:created}=await contentApi.createPoi(body,token);
+        onSaved(created);
+        onClose();
+        return;
       }
 
       onSaved();
@@ -1292,6 +1295,7 @@ function PoiForm({
 
 function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
   const nav=useNavigate();
+  const [params,setParams]=useSearchParams();
 
   const [pois,setPois]=useState<POI[]>([]);
   const [loading,setLoading]=useState(true);
@@ -1318,6 +1322,14 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
   useEffect(()=>{
     void load();
   },[load]);
+
+  const mappedPois=pois.filter(p=>Number.isFinite(p.lat)&&Number.isFinite(p.lon));
+  const selectedPoi=mappedPois.find(p=>p.id===params.get('nearestTo'));
+  const nearest=selectedPoi?mappedPois.reduce<{poi:POI;meters:number}|null>((best,p)=>{
+    if(p.id===selectedPoi.id)return best;
+    const meters=distanceM([selectedPoi.lat,selectedPoi.lon],[p.lat,p.lon]);
+    return !best||meters<best.meters?{poi:p,meters}:best;
+  },null):null;
 
   // Lọc danh sách theo tên và danh mục
   const list=pois.filter(p=>
@@ -1365,6 +1377,42 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
             Thử lại
           </button>
         </div>
+      )}
+
+      {selectedPoi&&(
+        <section className="panel" aria-label="Điểm tham quan gần nhất">
+          <h2>Điểm gần nhất với {poiName(selectedPoi,'vi')}</h2>
+          {nearest
+            ?<p><mark>{poiName(nearest.poi,'vi')}</mark> · {Math.round(nearest.meters)} m</p>
+            :<p>Chưa có điểm tham quan nào khác để so sánh.</p>}
+          <MapContainer
+            key={JSON.stringify([selectedPoi.id,mappedPois.map(p=>[p.id,p.lat,p.lon])])}
+            bounds={L.latLngBounds(mappedPois.map(p=>L.latLng(p.lat,p.lon)))}
+            boundsOptions={{padding:[32,32],maxZoom:18}}
+            className="map"
+          >
+            <TileLayer attribution="&copy; OpenStreetMap contributors" url={TILE}/>
+            {mappedPois.filter(p=>p.id!==nearest?.poi.id).map(p=>(
+              <CircleMarker
+                key={p.id}
+                center={[p.lat,p.lon]}
+                radius={p.id===selectedPoi.id?9:6}
+                pathOptions={{color:'#1e40af',fillColor:'#3b82f6',fillOpacity:1}}
+              >
+                <Popup>{poiName(p,'vi')}{p.id===selectedPoi.id?' · Điểm đang chọn':''}</Popup>
+              </CircleMarker>
+            ))}
+            {nearest&&(
+              <CircleMarker
+                center={[nearest.poi.lat,nearest.poi.lon]}
+                radius={9}
+                pathOptions={{color:'#854d0e',fillColor:'#facc15',fillOpacity:1}}
+              >
+                <Popup>{poiName(nearest.poi,'vi')} · {Math.round(nearest.meters)} m</Popup>
+              </CircleMarker>
+            )}
+          </MapContainer>
+        </section>
       )}
 
       <section className="panel">
@@ -1427,6 +1475,13 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
                       <div className="table-actions">
                         <button
                           className="icon-btn"
+                          onClick={()=>setParams({nearestTo:p.id})}
+                          aria-label={`Xem điểm gần nhất với ${poiName(p,'vi')}`}
+                        >
+                          Tìm gần nhất
+                        </button>
+                        <button
+                          className="icon-btn"
                           onClick={()=>setEditing(p)}
                           title="Sửa"
                         >
@@ -1462,7 +1517,10 @@ function StaffPois({staff}:{staff:ReturnType<typeof useStaff>}){
           poi={editing||null}
           token={staff.token}
           onClose={()=>setEditing(undefined)}
-          onSaved={()=>void load()}
+          onSaved={created=>{
+            if(created)setParams({nearestTo:created.id},{replace:true});
+            void load();
+          }}
           onUnauthorized={()=>{
             staff.logout();
             nav('/staff',{replace:true});
